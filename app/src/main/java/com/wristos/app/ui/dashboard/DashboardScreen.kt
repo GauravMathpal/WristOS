@@ -7,12 +7,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,9 +23,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.wristos.app.data.ble.WatchConnectionState
+import com.wristos.app.data.ble.WatchData
 
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
+    val watchData by viewModel.watchData.collectAsState()
+    val pendingTasks by viewModel.pendingTasksCount.collectAsState()
+
+    val isConnected = watchData.connectionState == WatchConnectionState.CONNECTED
+    val isScanning = watchData.connectionState == WatchConnectionState.SCANNING || watchData.connectionState == WatchConnectionState.CONNECTING
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -55,23 +67,48 @@ fun DashboardScreen() {
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .background(Color(0xFF10B981).copy(alpha = 0.2f), CircleShape),
+                            .background(
+                                if (isConnected) Color(0xFF10B981).copy(alpha = 0.2f)
+                                else MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                                CircleShape
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.BluetoothConnected,
-                            contentDescription = "Watch Connected",
-                            tint = Color(0xFF10B981)
+                            imageVector = if (isConnected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth,
+                            contentDescription = "Watch Connection",
+                            tint = if (isConnected) Color(0xFF10B981) else MaterialTheme.colorScheme.error
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("PineTime Watch", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text("Connected • 85% Battery", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(watchData.deviceName, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text(
+                            text = when (watchData.connectionState) {
+                                WatchConnectionState.CONNECTED -> "Connected • ${watchData.batteryLevel}% Battery"
+                                WatchConnectionState.CONNECTING -> "Connecting to watch..."
+                                WatchConnectionState.SCANNING -> "Scanning for PineTime..."
+                                WatchConnectionState.DISCONNECTED -> "Disconnected"
+                            },
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-                Badge(containerColor = Color(0xFF10B981).copy(alpha = 0.2f)) {
-                    Text("ACTIVE", color = Color(0xFF10B981), modifier = Modifier.padding(4.dp), fontWeight = FontWeight.Bold)
+                FilledTonalButton(
+                    onClick = {
+                        if (isConnected) viewModel.disconnectWatch()
+                        else viewModel.connectWatch()
+                    },
+                    enabled = !isScanning
+                ) {
+                    Text(
+                        when {
+                            isScanning -> "Pairing..."
+                            isConnected -> "Disconnect"
+                            else -> "Connect"
+                        }
+                    )
                 }
             }
         }
@@ -83,15 +120,15 @@ fun DashboardScreen() {
         ) {
             MetricCard(
                 title = "Steps",
-                value = "6,420",
+                value = if (isConnected) "%,d".format(watchData.stepCount) else "--",
                 unit = "/ 10,000",
-                icon = Icons.Default.DirectionsWalk,
+                icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                 color = Color(0xFF3B82F6),
                 modifier = Modifier.weight(1f)
             )
             MetricCard(
                 title = "Heart Rate",
-                value = "74",
+                value = if (isConnected && watchData.heartRate > 0) watchData.heartRate.toString() else "--",
                 unit = "BPM",
                 icon = Icons.Default.Favorite,
                 color = Color(0xFFEF4444),
@@ -99,7 +136,7 @@ fun DashboardScreen() {
             )
         }
 
-        // Quick Focus / Productivity Card
+        // Focus Session & Alerts Card
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -127,17 +164,20 @@ fun DashboardScreen() {
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("Focus Session", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text("Pomodoro: 25 mins", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Watch Alert Sync", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text("Send alert & vibrate watch", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Button(onClick = { /* TODO: send focus trigger to watch */ }) {
-                    Text("Start")
+                Button(
+                    onClick = { viewModel.sendTestAlert() },
+                    enabled = isConnected
+                ) {
+                    Text("Alert Watch")
                 }
             }
         }
 
-        // Recent Assistant Highlight
+        // AI & Task Insight Box
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -145,13 +185,17 @@ fun DashboardScreen() {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "AI Quick Insight",
+                    text = "WristOS Daily Summary",
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "You're 3,580 steps away from your daily goal. Your next reminder is in 45 minutes.",
+                    text = if (isConnected) {
+                        "PineTime is synced. You have $pendingTasks pending task(s) today. Walk target progress: ${watchData.stepCount}/10,000."
+                    } else {
+                        "Connect your PineTime watch to view live telemetry and receive reminders directly on your wrist."
+                    },
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
