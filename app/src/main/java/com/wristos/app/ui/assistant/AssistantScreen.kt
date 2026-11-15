@@ -4,31 +4,32 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-data class ChatMessage(val content: String, val isUser: Boolean)
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun AssistantScreen() {
+fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
+    val messages by viewModel.messages.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var inputText by remember { mutableStateOf("") }
-    val messages = remember {
-        mutableStateListOf(
-            ChatMessage("Hello Gaurav! I'm your WristOS Assistant. How can I help you today?", isUser = false),
-            ChatMessage("Remind me to drink water and check my step count.", isUser = true),
-            ChatMessage("I've set a reminder. You've walked 6,420 steps so far—well on track for your 10k goal!", isUser = false)
-        )
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
     }
 
     Column(
@@ -36,7 +37,7 @@ fun AssistantScreen() {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Top Header
+        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -50,27 +51,41 @@ fun AssistantScreen() {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Powered by Gemini AI",
+                    text = if (viewModel.isGeminiConfigured) "Gemini 1.5 Flash Connected" else "API Key Not Set (Local Offline)",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (viewModel.isGeminiConfigured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             }
         }
 
-        // Chat conversation list
+        // Conversation
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(messages) { msg ->
+            items(messages, key = { it.id }) { msg ->
                 ChatBubble(message = msg)
+            }
+
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
             }
         }
 
-        // Input bar
+        // Input
         Surface(
             modifier = Modifier.fillMaxWidth(),
             tonalElevation = 3.dp
@@ -82,7 +97,7 @@ fun AssistantScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { /* TODO: Voice STT */ },
+                    onClick = { /* Voice input hook */ },
                     modifier = Modifier
                         .size(44.dp)
                         .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
@@ -99,7 +114,7 @@ fun AssistantScreen() {
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Ask or tell something...") },
+                    placeholder = { Text("Ask or command...") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp),
                     maxLines = 3
@@ -109,21 +124,25 @@ fun AssistantScreen() {
 
                 IconButton(
                     onClick = {
-                        if (inputText.isNotBlank()) {
-                            messages.add(ChatMessage(inputText.trim(), isUser = true))
-                            val reply = "WristOS received: '${inputText.trim()}'. Connecting with Gemini API in next milestone!"
-                            messages.add(ChatMessage(reply, isUser = false))
+                        if (inputText.isNotBlank() && !isLoading) {
+                            viewModel.sendMessage(inputText)
                             inputText = ""
                         }
                     },
+                    enabled = inputText.isNotBlank() && !isLoading,
                     modifier = Modifier
                         .size(44.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .background(
+                            if (inputText.isNotBlank() && !isLoading) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            CircleShape
+                        )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        tint = if (inputText.isNotBlank() && !isLoading) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -132,7 +151,7 @@ fun AssistantScreen() {
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(message: AssistantMessage) {
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
