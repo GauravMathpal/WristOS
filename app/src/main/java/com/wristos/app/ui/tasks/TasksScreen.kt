@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,19 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-data class TaskItem(val id: Int, val title: String, val time: String, val isCompleted: Boolean = false)
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.wristos.app.data.local.task.TaskEntity
 
 @Composable
-fun TasksScreen() {
-    val tasks = remember {
-        mutableStateListOf(
-            TaskItem(1, "Team sync with Group 2 (BLE Protocol)", "Today, 4:00 PM", false),
-            TaskItem(2, "Review InfiniTime sensor documentation", "Today, 6:30 PM", false),
-            TaskItem(3, "Walk 10,000 steps daily target", "All Day", true),
-            TaskItem(4, "Configure Supabase credentials", "Tomorrow, 10:00 AM", false)
-        )
-    }
+fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
+    val tasks by viewModel.tasks.collectAsState()
 
     var showDialog by remember { mutableStateOf(false) }
     var newTaskTitle by remember { mutableStateOf("") }
@@ -65,19 +59,29 @@ fun TasksScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(tasks) { task ->
-                    TaskCard(
-                        task = task,
-                        onToggle = {
-                            val idx = tasks.indexOfFirst { it.id == task.id }
-                            if (idx != -1) {
-                                tasks[idx] = tasks[idx].copy(isCompleted = !tasks[idx].isCompleted)
-                            }
-                        }
+            if (tasks.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No tasks yet. Tap + to add one!",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(tasks, key = { it.id }) { task ->
+                        TaskCard(
+                            task = task,
+                            onToggle = { viewModel.toggleTask(task) },
+                            onDelete = { viewModel.deleteTask(task) }
+                        )
+                    }
                 }
             }
         }
@@ -97,7 +101,7 @@ fun TasksScreen() {
                 confirmButton = {
                     TextButton(onClick = {
                         if (newTaskTitle.isNotBlank()) {
-                            tasks.add(TaskItem(tasks.size + 1, newTaskTitle.trim(), "Today", false))
+                            viewModel.addTask(newTaskTitle.trim())
                             newTaskTitle = ""
                             showDialog = false
                         }
@@ -116,7 +120,11 @@ fun TasksScreen() {
 }
 
 @Composable
-fun TaskCard(task: TaskItem, onToggle: () -> Unit) {
+fun TaskCard(
+    task: TaskEntity,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
@@ -156,9 +164,16 @@ fun TaskCard(task: TaskItem, onToggle: () -> Unit) {
                     color = if (task.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = task.time,
+                    text = task.dueTime,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete Task",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
         }
