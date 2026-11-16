@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { db, TaskRecord } from '../lib/db'
+import { db, TaskRecord, MemoryRecord } from '../lib/db'
 import { taskRepository, memoryRepository } from '../lib/repository'
+import { queryAssistant } from '../lib/assistantService'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Sparkles, 
@@ -11,7 +12,7 @@ import {
   VolumeX, 
   Zap, 
   Bot, 
-  User 
+  User
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -29,8 +30,8 @@ export function AssistantScreen() {
   const [ttsEnabled, setTtsEnabled] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
 
-  const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
-  const memories = useLiveQuery(() => db.memories.toArray(), []) || []
+  const tasks = useLiveQuery(() => db.tasks.filter(t => !t.deletedAt).toArray(), []) || []
+  const memories = useLiveQuery(() => db.memories.filter(m => !m.deletedAt).toArray(), []) || []
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -100,41 +101,44 @@ export function AssistantScreen() {
     setInput('')
     setIsLoading(true)
 
-    // Simulated Smart Action parsing (will connect directly to Supabase Gemini Edge Function in M4/M5)
-    setTimeout(async () => {
-      const lower = textToSend.toLowerCase()
-      let replyText = "I have noted that and updated your personal context."
+    try {
+      const pendingTaskTitles = tasks.filter((t: TaskRecord) => !t.isCompleted).map((t: TaskRecord) => t.title)
+      const memoryFacts = memories.map((m: MemoryRecord) => `${m.tag}: ${m.fact}`)
+
+      const parsedReply = await queryAssistant({
+        prompt: textToSend.trim(),
+        memories: memoryFacts,
+        tasks: pendingTaskTitles
+      })
+
       let actionBadge: string | undefined = undefined
 
-      if (lower.includes('task') || lower.includes('remind') || lower.includes('agenda')) {
-        const title = textToSend.replace(/(remind me to|create a task to|add task)/i, '').trim() || textToSend
-        await taskRepository.add(title.charAt(0).toUpperCase() + title.slice(1), 'Today')
-        replyText = `Task added to your agenda: "${title}".`
-        actionBadge = `Created Task: "${title}"`
-      } else if (lower.includes('remember') || lower.includes('save fact')) {
-        const fact = textToSend.replace(/(remember that|save fact)/i, '').trim() || textToSend
-        await memoryRepository.add('Personal', fact.charAt(0).toUpperCase() + fact.slice(1))
-        replyText = `Stored in your Knowledge Vault: "${fact}".`
-        actionBadge = `Saved Memory in Vault`
-      } else if (lower.includes('vibrate') || lower.includes('alert watch')) {
-        replyText = `Dispatched haptic alert vibration to your PineTime smartwatch.`
-        actionBadge = `Watch Alert BLE 0x1811 Sent`
-      } else {
-        replyText = `You have ${tasks.filter((t: TaskRecord) => !t.isCompleted).length} pending tasks today and ${memories.length} facts in your Vault. PineTime telemetry is streaming steadily.`
+      // Execute extracted smart actions into local-first Dexie DB
+      if (parsedReply.action.type === 'TASK' && parsedReply.action.task) {
+        await taskRepository.add(parsedReply.action.task.title, parsedReply.action.task.dueTime)
+        actionBadge = `Created Task: "${parsedReply.action.task.title}"`
+      } else if (parsedReply.action.type === 'MEMORY' && parsedReply.action.memory) {
+        await memoryRepository.add(parsedReply.action.memory.tag, parsedReply.action.memory.fact)
+        actionBadge = `Saved in Vault: "${parsedReply.action.memory.tag}"`
+      } else if (parsedReply.action.type === 'ALERT' && parsedReply.action.alert) {
+        actionBadge = `Watch Alert: "${parsedReply.action.alert.message}"`
       }
 
       const aiMessage: Message = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
-        text: replyText,
+        text: parsedReply.cleanText,
         actionBadge,
         timestamp: Date.now()
       }
 
       setMessages((prev) => [...prev, aiMessage])
+      speak(parsedReply.cleanText)
+    } catch (e) {
+      console.error(e)
+    } finally {
       setIsLoading(false)
-      speak(replyText)
-    }, 700)
+    }
   }
 
   return (
@@ -147,10 +151,10 @@ export function AssistantScreen() {
           </div>
           <div>
             <div className="text-xs font-bold text-white flex items-center gap-2">
-              <span>WristOS Gemini AI</span>
+              <span>WristOS Intelligence</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             </div>
-            <div className="text-[11px] text-slate-400">{memories.length} facts injected in prompt</div>
+            <div className="text-[11px] text-slate-400">{memories.length} facts & {tasks.filter(t => !t.isCompleted).length} tasks in prompt</div>
           </div>
         </div>
 
