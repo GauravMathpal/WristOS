@@ -337,6 +337,7 @@ fun LoadingBubble() {
                     fontSize = 13.sp
                 )
             }
+
         }
     }
 }

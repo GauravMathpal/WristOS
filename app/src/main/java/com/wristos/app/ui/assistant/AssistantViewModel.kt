@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wristos.app.core.voice.VoiceManager
+import com.wristos.app.data.ble.BleManagerProvider
 import com.wristos.app.data.ble.WatchBleManager
 import com.wristos.app.data.local.WristOSDatabase
 import com.wristos.app.data.local.memory.MemoryEntity
@@ -28,7 +29,7 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
     private val database = WristOSDatabase.getDatabase(application)
     private val geminiClient = GeminiAssistantClient()
     val voiceManager = VoiceManager(application)
-    val bleManager = WatchBleManager(application)
+    val bleManager = BleManagerProvider.getInstance(application)
 
     private val _messages = MutableStateFlow<List<AssistantMessage>>(
         listOf(

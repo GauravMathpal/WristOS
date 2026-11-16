@@ -74,7 +74,7 @@ class GeminiAssistantClient {
         }
     }
 
-    private fun parseAssistantReply(rawText: String): AssistantReply {
+    fun parseAssistantReply(rawText: String): AssistantReply {
         val actionRegex = Regex("\\[ACTION:(TASK|MEMORY|ALERT)\\|(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
         val match = actionRegex.find(rawText)
 
