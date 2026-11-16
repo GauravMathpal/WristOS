@@ -1,6 +1,8 @@
 package com.wristos.app.ui.dashboard
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -8,16 +10,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BluetoothConnected
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -25,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wristos.app.data.ble.WatchConnectionState
-import com.wristos.app.data.ble.WatchData
+import com.wristos.app.ui.theme.*
 
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
@@ -35,205 +36,337 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
     val isConnected = watchData.connectionState == WatchConnectionState.CONNECTED
     val isScanning = watchData.connectionState == WatchConnectionState.SCANNING || watchData.connectionState == WatchConnectionState.CONNECTING
 
+    val statusDotColor by animateColorAsState(
+        targetValue = when (watchData.connectionState) {
+            WatchConnectionState.CONNECTED -> EmeraldSuccess
+            WatchConnectionState.CONNECTING, WatchConnectionState.SCANNING -> AmberAlert
+            WatchConnectionState.DISCONNECTED -> CoralWarning
+        },
+        label = "statusDot"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
+            .background(DarkBackground)
+            .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "WristOS Dashboard",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Watch Status Card
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
+        // Futuristic Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            Column {
+                Text(
+                    text = "WRISTOS",
+                    style = MaterialTheme.typography.labelMedium,
+                    letterSpacing = 2.sp,
+                    color = CyanPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Control Center",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = DarkSurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
-                            .background(
-                                if (isConnected) Color(0xFF10B981).copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isConnected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth,
-                            contentDescription = "Watch Connection",
-                            tint = if (isConnected) Color(0xFF10B981) else MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(watchData.deviceName, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(
-                            text = when (watchData.connectionState) {
-                                WatchConnectionState.CONNECTED -> "Connected • ${watchData.batteryLevel}% Battery"
-                                WatchConnectionState.CONNECTING -> "Connecting to watch..."
-                                WatchConnectionState.SCANNING -> "Scanning for PineTime..."
-                                WatchConnectionState.DISCONNECTED -> "Disconnected"
-                            },
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                FilledTonalButton(
-                    onClick = {
-                        if (isConnected) viewModel.disconnectWatch()
-                        else viewModel.connectWatch()
-                    },
-                    enabled = !isScanning
-                ) {
+                            .size(8.dp)
+                            .background(statusDotColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        when {
-                            isScanning -> "Pairing..."
-                            isConnected -> "Disconnect"
-                            else -> "Connect"
-                        }
+                        text = when (watchData.connectionState) {
+                            WatchConnectionState.CONNECTED -> "SYNCED"
+                            WatchConnectionState.SCANNING -> "SCANNING"
+                            WatchConnectionState.CONNECTING -> "LINKING"
+                            WatchConnectionState.DISCONNECTED -> "STANDALONE"
+                        },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = statusDotColor
                     )
                 }
             }
         }
 
-        // Metrics Grid (Steps & Heart Rate)
+        // Hardware Watch Card
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isConnected) CyanPrimary.copy(alpha = 0.3f) else CardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .background(
+                                    brush = if (isConnected) Brush.linearGradient(listOf(CyanPrimary.copy(alpha = 0.2f), VioletSecondary.copy(alpha = 0.2f)))
+                                    else Brush.linearGradient(listOf(DarkSurfaceElevated, DarkSurfaceElevated)),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .border(1.dp, if (isConnected) CyanPrimary.copy(alpha = 0.4f) else CardBorder, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isConnected) Icons.Default.Watch else Icons.Default.BluetoothDisabled,
+                                contentDescription = "Watch Icon",
+                                tint = if (isConnected) CyanPrimary else TextTertiary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column {
+                            Text(
+                                text = watchData.deviceName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (isConnected) "InfiniTime BLE • ${watchData.batteryLevel}% Battery"
+                                else "PineTime Companion Unlinked",
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            if (isConnected) viewModel.disconnectWatch()
+                            else viewModel.connectWatch()
+                        },
+                        enabled = !isScanning,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (isConnected) CoralWarning.copy(alpha = 0.2f) else CyanPrimary.copy(alpha = 0.2f),
+                            contentColor = if (isConnected) CoralWarning else CyanPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = when {
+                                isScanning -> "Pairing..."
+                                isConnected -> "Unlink"
+                                else -> "Connect"
+                            },
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Live Health & Activity Telemetry
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            MetricCard(
-                title = "Steps",
+            TelemetryCard(
+                title = "STEPS TODAY",
                 value = if (isConnected) "%,d".format(watchData.stepCount) else "--",
                 unit = "/ 10,000",
                 icon = Icons.AutoMirrored.Filled.DirectionsWalk,
-                color = Color(0xFF3B82F6),
+                accentColor = CyanPrimary,
+                progress = if (isConnected) (watchData.stepCount / 10000f).coerceIn(0f, 1f) else 0f,
                 modifier = Modifier.weight(1f)
             )
-            MetricCard(
-                title = "Heart Rate",
+
+            TelemetryCard(
+                title = "HEART RATE",
                 value = if (isConnected && watchData.heartRate > 0) watchData.heartRate.toString() else "--",
                 unit = "BPM",
                 icon = Icons.Default.Favorite,
-                color = Color(0xFFEF4444),
+                accentColor = CoralWarning,
+                progress = if (isConnected && watchData.heartRate > 0) (watchData.heartRate / 180f).coerceIn(0f, 1f) else 0f,
                 modifier = Modifier.weight(1f)
             )
         }
 
-        // Focus Session & Alerts Card
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        // Productivity & Watch Interop Actions
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(0xFF8B5CF6).copy(alpha = 0.2f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = "Focus Timer",
-                            tint = Color(0xFF8B5CF6)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text("Watch Alert Sync", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text("Send alert & vibrate watch", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Button(
-                    onClick = { viewModel.sendTestAlert() },
-                    enabled = isConnected
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "HARDWARE ACTIONS",
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.sp,
+                    color = TextTertiary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Alert Watch")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(VioletSecondary.copy(alpha = 0.2f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Vibration,
+                                contentDescription = "Vibrate Alert",
+                                tint = VioletSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Vibrate & Alert Watch", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
+                            Text("Dispatch BLE 0x1811 notification", fontSize = 12.sp, color = TextSecondary)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.sendTestAlert() },
+                        enabled = isConnected,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isConnected) VioletSecondary else CardBorder),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Trigger", color = if (isConnected) VioletSecondary else TextTertiary, fontSize = 12.sp)
+                    }
                 }
             }
         }
 
-        // AI & Task Insight Box
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        // System Intelligence Insight Card
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = DarkSurfaceElevated,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderHighlight),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "WristOS Daily Summary",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = "Intelligence",
+                        tint = AmberAlert,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "AI System Digest",
+                        fontWeight = FontWeight.Bold,
+                        color = AmberAlert,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
                     text = if (isConnected) {
-                        "PineTime is synced. You have $pendingTasks pending task(s) today. Walk target progress: ${watchData.stepCount}/10,000."
+                        "PineTime telemetry is streaming live. You have $pendingTasks pending task(s) on your agenda. Say 'Hey WristOS' or tap the mic on the Assistant tab to plan your next sprint."
                     } else {
-                        "Connect your PineTime watch to view live telemetry and receive reminders directly on your wrist."
+                        "PineTime companion watch is unlinked. Tap 'Connect' above to enable step tracking, heart rate monitoring, and wrist vibration alerts."
                     },
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = TextPrimary
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun MetricCard(
+fun TelemetryCard(
     title: String,
     value: String,
     unit: String,
     icon: ImageVector,
-    color: Color,
+    accentColor: Color,
+    progress: Float,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = DarkSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
         modifier = modifier
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(color.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = icon, contentDescription = title, tint = color, modifier = Modifier.size(20.dp))
+                Text(
+                    text = title,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    color = TextTertiary
+                )
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(accentColor.copy(alpha = 0.15f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(16.dp))
+                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(title, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(value, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(unit, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+                Text(unit, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(bottom = 3.dp))
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = accentColor,
+                trackColor = DarkSurfaceElevated
+            )
         }
     }
 }

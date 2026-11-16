@@ -1,10 +1,17 @@
 package com.wristos.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +24,7 @@ import com.wristos.app.ui.dashboard.DashboardScreen
 import com.wristos.app.ui.memory.MemoryScreen
 import com.wristos.app.ui.settings.SettingsScreen
 import com.wristos.app.ui.tasks.TasksScreen
+import com.wristos.app.ui.theme.*
 
 @Composable
 fun MainScreen() {
@@ -25,13 +33,46 @@ fun MainScreen() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
+        containerColor = DarkBackground,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = DarkSurface,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .border(
+                        width = 1.dp,
+                        color = CardBorder,
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                    )
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            ) {
                 bottomNavItems.forEach { screen ->
+                    val selected = currentRoute == screen.route
+                    val iconTint by animateColorAsState(
+                        targetValue = if (selected) CyanPrimary else TextTertiary,
+                        label = "navIconTint"
+                    )
+
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = currentRoute == screen.route,
+                        icon = {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = screen.title,
+                                tint = iconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = screen.title,
+                                color = if (selected) CyanPrimary else TextTertiary,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        selected = selected,
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = CyanPrimary.copy(alpha = 0.15f)
+                        ),
                         onClick = {
                             if (currentRoute != screen.route) {
                                 navController.navigate(screen.route) {
