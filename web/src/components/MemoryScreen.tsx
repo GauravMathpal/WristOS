@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { db, MemoryRecord } from '../lib/db'
+import { memoryRepository } from '../lib/repository'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   BrainCircuit, 
@@ -7,7 +8,9 @@ import {
   Plus, 
   Trash2, 
   Tag, 
-  Calendar
+  Calendar,
+  CloudCheck,
+  CloudUpload
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -18,31 +21,26 @@ export function MemoryScreen() {
   const [newFact, setNewFact] = useState('')
 
   const memories = useLiveQuery(() => {
+    const active = db.memories.filter((m) => !m.deletedAt)
     if (!searchQuery.trim()) {
-      return db.memories.orderBy('createdAt').reverse().toArray()
+      return active.reverse().sortBy('createdAt')
     }
     const q = searchQuery.toLowerCase().trim()
-    return db.memories
+    return active
       .filter((m) => m.fact.toLowerCase().includes(q) || m.tag.toLowerCase().includes(q))
-      .toArray()
+      .reverse()
+      .sortBy('createdAt')
   }, [searchQuery]) || []
 
   const handleDelete = async (id: string) => {
-    await db.memories.delete(id)
+    await memoryRepository.delete(id)
   }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newFact.trim()) return
 
-    const newMemory: MemoryRecord = {
-      id: `mem-${Date.now()}`,
-      tag: newTag.trim() || 'General',
-      fact: newFact.trim(),
-      createdAt: Date.now()
-    }
-
-    await db.memories.add(newMemory)
+    await memoryRepository.add(newTag, newFact)
     setNewFact('')
     setNewTag('Personal')
     setShowAddModal(false)
@@ -60,7 +58,7 @@ export function MemoryScreen() {
           </div>
           <h2 className="text-2xl font-extrabold text-white">Personal Intelligence Memory</h2>
           <p className="text-xs text-slate-400">
-            {memories.length} facts preserved locally in Dexie IndexedDB & ready for Gemini prompt context
+            {memories.length} facts preserved locally in Dexie IndexedDB with Supabase cloud backup
           </p>
         </div>
 
@@ -108,7 +106,7 @@ export function MemoryScreen() {
       {/* Memory Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AnimatePresence initial={false}>
-          {memories.map((m) => (
+          {memories.map((m: MemoryRecord) => (
             <motion.div
               key={m.id}
               initial={{ opacity: 0, scale: 0.98 }}
@@ -122,12 +120,19 @@ export function MemoryScreen() {
                     <Tag className="w-3 h-3" />
                     <span>{m.tag}</span>
                   </span>
-                  <button
-                    onClick={() => handleDelete(m.id)}
-                    className="text-slate-500 hover:text-rose-400 transition-colors p-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {m.syncStatus === 'synced' ? (
+                      <span title="Cloud Synced"><CloudCheck className="w-3.5 h-3.5 text-emerald-400/80" /></span>
+                    ) : (
+                      <span title="Pending Sync"><CloudUpload className="w-3.5 h-3.5 text-amber-400/80" /></span>
+                    )}
+                    <button
+                      onClick={() => handleDelete(m.id)}
+                      className="text-slate-500 hover:text-rose-400 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-sm text-slate-200 leading-relaxed font-normal">
                   {m.fact}

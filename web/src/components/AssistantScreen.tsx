@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { db } from '../lib/db'
+import { db, TaskRecord } from '../lib/db'
+import { taskRepository, memoryRepository } from '../lib/repository'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Sparkles, 
@@ -107,30 +108,19 @@ export function AssistantScreen() {
 
       if (lower.includes('task') || lower.includes('remind') || lower.includes('agenda')) {
         const title = textToSend.replace(/(remind me to|create a task to|add task)/i, '').trim() || textToSend
-        await db.tasks.add({
-          id: `task-${Date.now()}`,
-          title: title.charAt(0).toUpperCase() + title.slice(1),
-          dueTime: 'Today',
-          isCompleted: false,
-          createdAt: Date.now()
-        })
+        await taskRepository.add(title.charAt(0).toUpperCase() + title.slice(1), 'Today')
         replyText = `Task added to your agenda: "${title}".`
         actionBadge = `Created Task: "${title}"`
       } else if (lower.includes('remember') || lower.includes('save fact')) {
         const fact = textToSend.replace(/(remember that|save fact)/i, '').trim() || textToSend
-        await db.memories.add({
-          id: `mem-${Date.now()}`,
-          tag: 'Personal',
-          fact: fact.charAt(0).toUpperCase() + fact.slice(1),
-          createdAt: Date.now()
-        })
+        await memoryRepository.add('Personal', fact.charAt(0).toUpperCase() + fact.slice(1))
         replyText = `Stored in your Knowledge Vault: "${fact}".`
         actionBadge = `Saved Memory in Vault`
       } else if (lower.includes('vibrate') || lower.includes('alert watch')) {
         replyText = `Dispatched haptic alert vibration to your PineTime smartwatch.`
         actionBadge = `Watch Alert BLE 0x1811 Sent`
       } else {
-        replyText = `You have ${tasks.filter(t => !t.isCompleted).length} pending tasks today and ${memories.length} facts in your Vault. PineTime telemetry is streaming steadily.`
+        replyText = `You have ${tasks.filter((t: TaskRecord) => !t.isCompleted).length} pending tasks today and ${memories.length} facts in your Vault. PineTime telemetry is streaming steadily.`
       }
 
       const aiMessage: Message = {
