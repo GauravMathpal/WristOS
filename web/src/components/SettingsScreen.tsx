@@ -4,14 +4,16 @@ import {
   Database, 
   Cloud, 
   Download, 
-  Upload,
-  User,
-  LogOut,
-  Mail,
-  RefreshCw,
-  CheckCircle2,
-  AlertCircle,
-  WifiOff
+  Upload, 
+  User, 
+  LogOut, 
+  Mail, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertCircle, 
+  WifiOff, 
+  Cpu, 
+  Check 
 } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -77,7 +79,7 @@ export function SettingsScreen() {
     a.download = `wristos_backup_${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setExportNotice('Export downloaded successfully!')
+    setExportNotice('Database exported successfully as JSON.')
     setTimeout(() => setExportNotice(null), 3000)
   }
 
@@ -98,7 +100,7 @@ export function SettingsScreen() {
         setExportNotice(`Imported ${data.tasks?.length || 0} tasks & ${data.memories?.length || 0} memories!`)
         syncService.triggerSync()
         setTimeout(() => setExportNotice(null), 4000)
-      } catch (err) {
+      } catch {
         alert("Invalid WristOS backup JSON file.")
       }
     }
@@ -107,29 +109,40 @@ export function SettingsScreen() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="p-6 rounded-3xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-xl">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Configuration</span>
+      
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-6 md:p-7 backdrop-blur-xl">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs">
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-slate-300 font-medium text-[11px]">System & Architecture Control</span>
           </div>
-          <h2 className="text-2xl font-extrabold text-white">System & Cloud Settings</h2>
-          <p className="text-xs text-slate-400">
-            Local-first Dexie storage, Supabase cloud sync, and PineTime BLE hardware toggles
+          
+          <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+            <span>Settings & Sync</span>
+          </h2>
+
+          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+            Configure local-first Dexie replication, Supabase multi-device synchronization, and InfiniTime Bluetooth Low Energy telemetry.
           </p>
         </div>
       </div>
 
       {/* Cloud Account & Synchronization Status */}
-      <div className="p-6 rounded-3xl bg-slate-900/40 border border-slate-800/80 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <Cloud className="w-4 h-4 text-emerald-400" />
-            <span>Supabase Cloud Sync</span>
-          </h3>
+      <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <Cloud className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Supabase Cloud Sync</h3>
+              <p className="text-[11px] text-slate-400">Continuous background sync with row-level security</p>
+            </div>
+          </div>
 
           {/* Sync status pill */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 border border-slate-800">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-white/[0.04] border border-white/[0.08] self-start sm:self-auto">
             {syncStatus === 'syncing' && (
               <>
                 <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
@@ -165,17 +178,17 @@ export function SettingsScreen() {
 
         {/* Auth / Account State */}
         {!isSupabaseConfigured ? (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
-            <p className="font-bold">Supabase Credentials Not Yet Configured</p>
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+            <p className="font-semibold">Supabase Credentials Not Yet Configured</p>
             <p className="text-slate-400">
               Your app is running in 100% offline Local-First mode with Dexie.js. To enable multi-device cloud backup, add <code className="text-amber-200">VITE_SUPABASE_URL</code> and <code className="text-amber-200">VITE_SUPABASE_ANON_KEY</code> to <code className="text-amber-200">web/.env</code>.
             </p>
           </div>
         ) : user ? (
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-                <User className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.1] text-white flex items-center justify-center font-bold text-xs">
+                {user.email ? user.email.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-200">{user.email}</p>
@@ -188,14 +201,14 @@ export function SettingsScreen() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => syncService.triggerSync()}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08] flex items-center gap-1.5 transition-all"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Sync Now</span>
               </button>
               <button
                 onClick={() => signOut()}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl text-xs font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 flex items-center gap-1.5 transition-all"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Sign Out</span>
@@ -203,28 +216,28 @@ export function SettingsScreen() {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleLogin} className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+          <form onSubmit={handleLogin} className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] space-y-3">
             <div>
               <p className="text-xs font-semibold text-slate-200">Sign in with Email (Magic Link)</p>
-              <p className="text-[11px] text-slate-400">Sync tasks and memories across your phone, tablet, and browser.</p>
+              <p className="text-[11px] text-slate-400">Sync tasks and memories seamlessly between your phone and browser.</p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
                 <input
                   type="email"
-                  placeholder="your.email@example.com"
+                  placeholder="name@example.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/20"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmittingAuth || !emailInput.trim()}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 shadow-md shadow-cyan-500/20 shrink-0"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 disabled:opacity-40 transition-all shrink-0"
               >
                 {isSubmittingAuth ? 'Sending...' : 'Send Magic Link'}
               </button>
@@ -237,88 +250,129 @@ export function SettingsScreen() {
         )}
       </div>
 
-      {/* Data Management Section */}
-      <div className="p-6 rounded-3xl bg-slate-900/40 border border-slate-800/80 space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-          <Database className="w-4 h-4 text-indigo-400" />
-          <span>Local Storage & Preservation (Room / Dexie)</span>
-        </h3>
+      {/* Local Storage & Data Preservation */}
+      <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <Database className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Local Database & Preservation</h3>
+            <p className="text-[11px] text-slate-400">Export offline Dexie data or import legacy Room backups</p>
+          </div>
+        </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
-          <p className="text-xs text-slate-300">
-            WristOS guarantees non-destructive persistence. Export your tasks and memory vault to JSON or import existing Room database data.
+        <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] space-y-3">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            WristOS guarantees non-destructive local persistence. You can download a complete JSON snapshot of all tasks, priority rankings, and knowledge vault facts at any time.
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button
               onClick={handleExportJson}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08] transition-all"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Database (JSON)</span>
+              <Download className="w-3.5 h-3.5 text-slate-400" />
+              <span>Export JSON Backup</span>
             </button>
 
-            <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 cursor-pointer">
-              <Upload className="w-3.5 h-3.5" />
-              <span>Import Data (JSON)</span>
+            <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08] cursor-pointer transition-all">
+              <Upload className="w-3.5 h-3.5 text-slate-400" />
+              <span>Import JSON Data</span>
               <input type="file" accept=".json" onChange={handleImportJson} className="hidden" />
             </label>
           </div>
 
           {exportNotice && (
-            <p className="text-xs text-emerald-400 font-semibold pt-1">✓ {exportNotice}</p>
+            <p className="text-xs text-emerald-400 font-medium pt-1 flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5" />
+              <span>{exportNotice}</span>
+            </p>
           )}
         </div>
       </div>
 
       {/* Hardware Section */}
-      <div className="p-6 rounded-3xl bg-slate-900/40 border border-slate-800/80 space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-          <Watch className="w-4 h-4 text-cyan-400" />
-          <span>InfiniTime BLE Companion</span>
-        </h3>
+      <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <Watch className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">InfiniTime PineTime BLE Companion</h3>
+            <p className="text-[11px] text-slate-400">GATT profile streaming and wrist haptics</p>
+          </div>
+        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
             <div>
-              <p className="text-sm font-semibold text-white">Auto-Sync Telemetry</p>
-              <p className="text-xs text-slate-400">Stream steps and heart rate continuously via BLE CTS & HRS</p>
+              <p className="text-xs font-semibold text-white">Auto-Sync Telemetry</p>
+              <p className="text-[11px] text-slate-400">Stream steps and heart rate continuously via BLE CTS & HRS</p>
             </div>
             <button
               onClick={() => setAutoSync(!autoSync)}
-              className={`w-12 h-6 rounded-full p-1 transition-colors ${autoSync ? 'bg-cyan-500' : 'bg-slate-800'}`}
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors ${autoSync ? 'bg-cyan-500' : 'bg-white/[0.1]'}`}
             >
-              <div className={`w-4 h-4 rounded-full bg-slate-950 transition-transform ${autoSync ? 'translate-x-6' : 'translate-x-0'}`} />
+              <div className={`w-5 h-5 rounded-full bg-slate-950 transition-transform ${autoSync ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
             <div>
-              <p className="text-sm font-semibold text-white">Forward Phone Notifications</p>
-              <p className="text-xs text-slate-400">Push reminder alerts to watch via GATT ANS 0x1811</p>
+              <p className="text-xs font-semibold text-white">Forward Phone Notifications</p>
+              <p className="text-[11px] text-slate-400">Push reminder alerts to watch via GATT Alert Notification Service (ANS 0x1811)</p>
             </div>
             <button
               onClick={() => setNotifications(!notifications)}
-              className={`w-12 h-6 rounded-full p-1 transition-colors ${notifications ? 'bg-cyan-500' : 'bg-slate-800'}`}
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors ${notifications ? 'bg-cyan-500' : 'bg-white/[0.1]'}`}
             >
-              <div className={`w-4 h-4 rounded-full bg-slate-950 transition-transform ${notifications ? 'translate-x-6' : 'translate-x-0'}`} />
+              <div className={`w-5 h-5 rounded-full bg-slate-950 transition-transform ${notifications ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
             <div>
-              <p className="text-sm font-semibold text-white">Wrist Haptic Vibration</p>
-              <p className="text-xs text-slate-400">Vibrate PineTime on scheduled alarms and AI priority alerts</p>
+              <p className="text-xs font-semibold text-white">Wrist Haptic Vibration</p>
+              <p className="text-[11px] text-slate-400">Vibrate PineTime on scheduled alarms and AI priority alerts</p>
             </div>
             <button
               onClick={() => setWristVibrate(!wristVibrate)}
-              className={`w-12 h-6 rounded-full p-1 transition-colors ${wristVibrate ? 'bg-cyan-500' : 'bg-slate-800'}`}
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors ${wristVibrate ? 'bg-cyan-500' : 'bg-white/[0.1]'}`}
             >
-              <div className={`w-4 h-4 rounded-full bg-slate-950 transition-transform ${wristVibrate ? 'translate-x-6' : 'translate-x-0'}`} />
+              <div className={`w-5 h-5 rounded-full bg-slate-950 transition-transform ${wristVibrate ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
         </div>
       </div>
+
+      {/* Diagnostics / System Information */}
+      <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl space-y-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">System Diagnostics</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-3 rounded-xl border border-white/[0.05] bg-white/[0.01] space-y-1">
+            <span className="text-slate-500 text-[11px]">Local Database Layer</span>
+            <p className="font-mono text-slate-200">Dexie.js v4 (IndexedDB)</p>
+          </div>
+
+          <div className="p-3 rounded-xl border border-white/[0.05] bg-white/[0.01] space-y-1">
+            <span className="text-slate-500 text-[11px]">Cloud Endpoint</span>
+            <p className="font-mono text-slate-200 truncate">clmnmyeaxumulyzraagp.supabase.co</p>
+          </div>
+
+          <div className="p-3 rounded-xl border border-white/[0.05] bg-white/[0.01] space-y-1">
+            <span className="text-slate-500 text-[11px]">Hardware BLE Driver</span>
+            <p className="font-mono text-slate-200">Web Bluetooth / Nordic CTS</p>
+          </div>
+
+          <div className="p-3 rounded-xl border border-white/[0.05] bg-white/[0.01] space-y-1">
+            <span className="text-slate-500 text-[11px]">Native Android Target</span>
+            <p className="font-mono text-slate-200">Capacitor 7 (com.wristos.app)</p>
+          </div>
+        </div>
+      </div>
+
     </div>
   )
 }

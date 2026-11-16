@@ -8,7 +8,6 @@ import {
   Clock, 
   CheckCircle, 
   Circle,
-  Filter,
   CloudCheck,
   CloudUpload
 } from 'lucide-react'
@@ -55,39 +54,38 @@ export function TasksScreen() {
 
   return (
     <div className="space-y-6">
+      
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Task Management</span>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-semibold">AGENDA MANAGER</span>
           </div>
-          <h2 className="text-2xl font-extrabold text-white">Daily Agenda & Reminders</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Tasks & Reminders</h2>
           <p className="text-xs text-slate-400">
             {pendingCount} remaining • {completedCount} completed ({completionRate}% progress)
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-cyan-500/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Task</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>New Task</span>
+        </button>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
         <div className="flex items-center gap-1.5">
           {(['all', 'pending', 'completed'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
                 filter === tab 
-                  ? 'bg-slate-800 text-cyan-400 border border-slate-700' 
+                  ? 'bg-white/[0.08] text-white font-semibold border border-white/[0.08]' 
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -96,25 +94,24 @@ export function TasksScreen() {
           ))}
         </div>
 
-        <div className="text-xs text-slate-500 flex items-center gap-1">
-          <Filter className="w-3.5 h-3.5" />
-          <span>Local Dexie + Supabase</span>
+        <div className="text-[11px] font-mono text-slate-400">
+          DEXIE + SUPABASE SYNCED
         </div>
       </div>
 
       {/* Task List */}
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         <AnimatePresence initial={false}>
           {filteredTasks.map((task) => (
             <motion.div
               key={task.id}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+              exit={{ opacity: 0, scale: 0.98 }}
+              className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
                 task.isCompleted
-                  ? 'bg-slate-900/30 border-slate-800/40 text-slate-500'
-                  : 'bg-slate-900/70 border-slate-800/80 hover:border-slate-700 text-slate-200'
+                  ? 'bg-white/[0.01] border-white/[0.03] text-slate-500'
+                  : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1] text-slate-200'
               }`}
             >
               <div className="flex items-center gap-3.5 min-w-0">
@@ -123,14 +120,14 @@ export function TasksScreen() {
                   className="shrink-0 transition-transform active:scale-90"
                 >
                   {task.isCompleted ? (
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <CheckCircle className="w-4 h-4 text-emerald-400" />
                   ) : (
-                    <Circle className="w-5 h-5 text-slate-500 hover:text-cyan-400" />
+                    <Circle className="w-4 h-4 text-slate-500 hover:text-cyan-400" />
                   )}
                 </button>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className={`text-sm font-semibold truncate ${task.isCompleted ? 'line-through text-slate-500' : 'text-slate-100'}`}>
+                    <p className={`text-xs sm:text-sm font-medium truncate ${task.isCompleted ? 'line-through text-slate-500' : 'text-slate-100'}`}>
                       {task.title}
                     </p>
                     {task.syncStatus === 'synced' ? (
@@ -148,65 +145,65 @@ export function TasksScreen() {
 
               <button
                 onClick={() => handleDelete(task.id)}
-                className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </motion.div>
           ))}
         </AnimatePresence>
 
         {filteredTasks.length === 0 && (
-          <div className="py-12 text-center rounded-2xl border border-dashed border-slate-800 text-slate-500 text-sm">
-            No tasks in this category. Click "New Task" or ask the AI Assistant.
+          <div className="py-12 text-center rounded-2xl border border-dashed border-white/[0.06] text-slate-400 text-xs">
+            No agenda items in this category.
           </div>
         )}
       </div>
 
       {/* Add Task Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-[#0f1117] border border-white/[0.1] shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Create New Task</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-sm">✕</button>
+              <h3 className="text-sm font-bold text-white">Create Agenda Item</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xs">✕</button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400">Task Title</label>
+            <form onSubmit={handleCreate} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-400">Task Title</label>
                 <input
                   type="text"
-                  placeholder="e.g., Sync BLE heart rate telemetry"
+                  placeholder="e.g., Validate PineTime step telemetry"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   autoFocus
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400">Schedule / Due Time</label>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-400">Due Schedule</label>
                 <input
                   type="text"
                   placeholder="e.g., Today 5:00 PM"
                   value={newDue}
                   onChange={(e) => setNewDue(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:bg-white/[0.04]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950"
                 >
                   Save Task
                 </button>

@@ -12,7 +12,7 @@ import {
   VolumeX, 
   Zap, 
   Bot, 
-  User
+  User 
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -37,7 +37,7 @@ export function AssistantScreen() {
     {
       id: 'm-0',
       role: 'assistant',
-      text: "Greetings Gaurav! WristOS Intelligence is active. Ask me anything, command tasks, or dictate new memories.",
+      text: "WristOS Intelligence online. Speak or write natural instructions to plan tasks, capture knowledge, or control your watch.",
       timestamp: Date.now()
     }
   ])
@@ -113,15 +113,14 @@ export function AssistantScreen() {
 
       let actionBadge: string | undefined = undefined
 
-      // Execute extracted smart actions into local-first Dexie DB
       if (parsedReply.action.type === 'TASK' && parsedReply.action.task) {
         await taskRepository.add(parsedReply.action.task.title, parsedReply.action.task.dueTime)
-        actionBadge = `Created Task: "${parsedReply.action.task.title}"`
+        actionBadge = `Added to Agenda: "${parsedReply.action.task.title}"`
       } else if (parsedReply.action.type === 'MEMORY' && parsedReply.action.memory) {
         await memoryRepository.add(parsedReply.action.memory.tag, parsedReply.action.memory.fact)
-        actionBadge = `Saved in Vault: "${parsedReply.action.memory.tag}"`
+        actionBadge = `Vault Saved: [${parsedReply.action.memory.tag}]`
       } else if (parsedReply.action.type === 'ALERT' && parsedReply.action.alert) {
-        actionBadge = `Watch Alert: "${parsedReply.action.alert.message}"`
+        actionBadge = `Watch Alert Dispatched (0x1811 ANS)`
       }
 
       const aiMessage: Message = {
@@ -142,36 +141,37 @@ export function AssistantScreen() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9.5rem)] md:h-[calc(100vh-8rem)]">
-      {/* Top AI Controls */}
-      <div className="flex items-center justify-between p-4 mb-3 rounded-2xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center">
+    <div className="flex flex-col h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)]">
+      
+      {/* Top Status Bar */}
+      <div className="flex items-center justify-between p-3.5 mb-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-white/[0.08] flex items-center justify-center text-cyan-400">
             <Bot className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xs font-bold text-white flex items-center gap-2">
-              <span>WristOS Intelligence</span>
+            <div className="text-xs font-semibold text-white flex items-center gap-2">
+              <span>Gemini 1.5 Flash</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             </div>
-            <div className="text-[11px] text-slate-400">{memories.length} facts & {tasks.filter(t => !t.isCompleted).length} tasks in prompt</div>
+            <div className="text-[10px] text-slate-400 font-mono">
+              {memories.length} FACTS • {tasks.filter(t => !t.isCompleted).length} TASKS IN CONTEXT
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTtsEnabled(!ttsEnabled)}
-            className={`p-2 rounded-xl text-xs font-medium transition-colors ${
-              ttsEnabled ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-slate-800 text-slate-500'
-            }`}
-            title="Speech Synthesis"
-          >
-            {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </button>
-        </div>
+        <button
+          onClick={() => setTtsEnabled(!ttsEnabled)}
+          className={`p-2 rounded-xl text-xs font-medium transition-all ${
+            ttsEnabled ? 'bg-white/[0.06] text-cyan-400 border border-white/[0.08]' : 'bg-transparent text-slate-500 hover:text-slate-300'
+          }`}
+          title="Speech Synthesis"
+        >
+          {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+        </button>
       </div>
 
-      {/* Chat Messages Log */}
+      {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         <AnimatePresence initial={false}>
           {messages.map((m) => (
@@ -179,27 +179,27 @@ export function AssistantScreen() {
               key={m.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex gap-3 max-w-2xl ${m.role === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
+              className={`flex gap-3 max-w-xl ${m.role === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
             >
               {m.role === 'assistant' && (
-                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 text-cyan-400 flex items-center justify-center shrink-0 mt-1">
+                <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] text-cyan-400 flex items-center justify-center shrink-0 mt-1">
                   <Sparkles className="w-3.5 h-3.5" />
                 </div>
               )}
 
               <div className="space-y-1.5">
                 <div
-                  className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
+                  className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed ${
                     m.role === 'user'
-                      ? 'bg-cyan-500 text-slate-950 font-medium rounded-tr-sm shadow-md shadow-cyan-500/10'
-                      : 'bg-slate-900/80 border border-slate-800 text-slate-200 rounded-tl-sm'
+                      ? 'bg-cyan-500 text-slate-950 font-medium rounded-tr-sm shadow-sm'
+                      : 'bg-[#12151e]/80 border border-white/[0.06] text-slate-200 rounded-tl-sm'
                   }`}
                 >
                   {m.text}
                 </div>
 
                 {m.actionBadge && (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-medium">
                     <Zap className="w-3 h-3" />
                     <span>{m.actionBadge}</span>
                   </div>
@@ -216,23 +216,23 @@ export function AssistantScreen() {
         </AnimatePresence>
 
         {isLoading && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 w-fit text-xs text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span>WristOS is reasoning...</span>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] w-fit text-xs text-slate-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+            <span>Reasoning across personal context...</span>
           </div>
         )}
 
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Bar */}
-      <div className="mt-3 relative">
+      {/* Floating Prompt Bar */}
+      <div className="mt-3">
         <form
           onSubmit={(e) => {
             e.preventDefault()
             handleSend()
           }}
-          className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-2xl backdrop-blur-xl"
+          className="flex items-center gap-2 p-1.5 rounded-2xl border border-white/[0.08] bg-[#11141c]/90 backdrop-blur-2xl shadow-xl"
         >
           <button
             type="button"
@@ -240,7 +240,7 @@ export function AssistantScreen() {
             className={`p-2.5 rounded-xl transition-all ${
               isListening 
                 ? 'bg-rose-500 text-white animate-pulse' 
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300'
             }`}
           >
             {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -248,16 +248,16 @@ export function AssistantScreen() {
 
           <input
             type="text"
-            placeholder={isListening ? "Listening to voice input..." : "Ask AI or command: 'Remind me to...', 'Remember that...'"}
+            placeholder={isListening ? "Listening..." : "Message assistant or command: 'Schedule task...', 'Remember that...'"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="flex-1 bg-transparent px-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="flex-1 bg-transparent px-2 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />
 
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold"
+            className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
           >
             <Send className="w-4 h-4" />
           </button>
