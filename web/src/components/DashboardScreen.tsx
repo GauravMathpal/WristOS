@@ -16,7 +16,7 @@ import {
 import { motion } from 'motion/react'
 
 export function DashboardScreen() {
-  const { watch, connectWatch, disconnectWatch, setActiveTab } = useAppStore()
+  const { watch, connectWatch, disconnectWatch, sendWatchAlert, setActiveTab } = useAppStore()
   
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
   const memories = useLiveQuery(() => db.memories.toArray(), []) || []
@@ -25,7 +25,7 @@ export function DashboardScreen() {
   const isConnected = watch.connectionState === 'connected'
 
   const handleTestAlert = () => {
-    alert("⚡ [BLE 0x1811 ANS] Dispatched vibration alert packet to PineTime smartwatch.")
+    sendWatchAlert("WristOS: Focus Session")
   }
 
   return (

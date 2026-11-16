@@ -1,13 +1,15 @@
 import { create } from 'zustand'
 import { ActiveTab, WatchState } from '../types'
+import { watchBleService } from '../lib/bleService'
 
 interface AppState {
   activeTab: ActiveTab
   setActiveTab: (tab: ActiveTab) => void
   watch: WatchState
   setWatch: (data: Partial<WatchState>) => void
-  connectWatch: () => void
-  disconnectWatch: () => void
+  connectWatch: () => Promise<void>
+  disconnectWatch: () => Promise<void>
+  sendWatchAlert: (msg?: string) => Promise<void>
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -15,27 +17,40 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   watch: {
     deviceName: 'PineTime',
-    connectionState: 'connected',
-    heartRate: 72,
-    stepCount: 6840,
-    batteryLevel: 88,
-    lastSyncTime: Date.now()
+    connectionState: 'disconnected',
+    heartRate: 0,
+    stepCount: 0,
+    batteryLevel: 0,
+    lastSyncTime: null
   },
   setWatch: (data) => set((state) => ({ watch: { ...state.watch, ...data } })),
-  connectWatch: () => {
+  connectWatch: async () => {
     set((state) => ({ watch: { ...state.watch, connectionState: 'connecting' } }))
-    setTimeout(() => {
+    try {
+      const name = await watchBleService.scanAndConnect((telemetry) => {
+        set((state) => ({
+          watch: {
+            ...state.watch,
+            ...telemetry,
+            lastSyncTime: Date.now()
+          }
+        }))
+      })
       set((state) => ({
         watch: {
           ...state.watch,
           connectionState: 'connected',
-          deviceName: 'PineTime (BLE)',
+          deviceName: name,
           lastSyncTime: Date.now()
         }
       }))
-    }, 1200)
+    } catch (e) {
+      console.error(e)
+      set((state) => ({ watch: { ...state.watch, connectionState: 'disconnected' } }))
+    }
   },
-  disconnectWatch: () => {
+  disconnectWatch: async () => {
+    await watchBleService.disconnect()
     set((state) => ({
       watch: {
         ...state.watch,
@@ -43,5 +58,8 @@ export const useAppStore = create<AppState>((set) => ({
         deviceName: 'PineTime'
       }
     }))
+  },
+  sendWatchAlert: async (msg = 'WristOS Alert') => {
+    await watchBleService.sendAlert(msg)
   }
 }))
