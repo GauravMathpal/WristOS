@@ -142,6 +142,14 @@ class WatchBleService {
     }
   }
 
+  public async syncTime(): Promise<void> {
+    if (this.deviceId) {
+      await this.syncCurrentTime(this.deviceId)
+    } else {
+      console.log('CTS simulated time synchronized.')
+    }
+  }
+
   private async syncCurrentTime(deviceId: string): Promise<void> {
     try {
       const now = new Date()

@@ -1,4 +1,4 @@
-export type ActiveTab = 'dashboard' | 'assistant' | 'tasks' | 'health' | 'memory' | 'settings'
+export type ActiveTab = 'dashboard' | 'assistant' | 'tasks' | 'focus' | 'health' | 'memory' | 'devices' | 'settings'
 
 export interface Task {
   id: string
