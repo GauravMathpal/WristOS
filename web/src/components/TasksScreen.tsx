@@ -6,10 +6,10 @@ import {
   Plus, 
   Trash2, 
   Clock, 
-  CheckCircle, 
-  Circle,
-  CloudCheck,
-  CloudUpload
+  Check, 
+  CloudCheck, 
+  CloudUpload,
+  X
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -55,11 +55,11 @@ export function TasksScreen() {
   return (
     <div className="space-y-6">
       
-      {/* Header */}
+      {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-semibold">AGENDA MANAGER</span>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-semibold">AGENDA & TASKS</span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Tasks & Reminders</h2>
           <p className="text-xs text-slate-400">
@@ -67,149 +67,190 @@ export function TasksScreen() {
           </p>
         </div>
 
-        <button
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.94 }}
+          transition={{ type: 'spring', stiffness: 450, damping: 20 }}
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-sm"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-bold text-xs transition-all shadow-md shadow-purple-500/25 shrink-0"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-4 h-4" />
           <span>New Task</span>
-        </button>
+        </motion.button>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs with Sliding Motion Indicator */}
       <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
-        <div className="flex items-center gap-1.5">
-          {(['all', 'pending', 'completed'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setFilter(tab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
-                filter === tab 
-                  ? 'bg-white/[0.08] text-white font-semibold border border-white/[0.08]' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {tab} ({tab === 'all' ? tasks.length : tab === 'pending' ? pendingCount : completedCount})
-            </button>
-          ))}
+        <div className="flex items-center p-1 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+          {(['all', 'pending', 'completed'] as const).map((tab) => {
+            const isSelected = filter === tab
+            const count = tab === 'all' ? tasks.length : tab === 'pending' ? pendingCount : completedCount
+            return (
+              <button
+                key={tab}
+                onClick={() => setFilter(tab)}
+                className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                  isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {isSelected && (
+                  <motion.div
+                    layoutId="taskFilterPill"
+                    transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-600/80 to-pink-600/80 shadow-sm"
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <span>{tab}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({count})</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
 
-        <div className="text-[11px] font-mono text-slate-400">
+        <div className="text-[11px] font-mono text-slate-400 hidden sm:block">
           DEXIE + SUPABASE SYNCED
         </div>
       </div>
 
-      {/* Task List */}
+      {/* Tasks List */}
       <div className="space-y-2.5">
         <AnimatePresence initial={false}>
-          {filteredTasks.map((task) => (
+          {filteredTasks.map((task: TaskRecord) => (
             <motion.div
               key={task.id}
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-                task.isCompleted
-                  ? 'bg-white/[0.01] border-white/[0.03] text-slate-500'
-                  : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1] text-slate-200'
-              }`}
+              whileHover={{ y: -2, scale: 1.005 }}
+              transition={{ duration: 0.18 }}
+              className="group flex items-center justify-between p-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.035] hover:border-purple-500/20 backdrop-blur-md transition-all"
             >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <button
-                  onClick={() => handleToggle(task)}
-                  className="shrink-0 transition-transform active:scale-90"
+              <div 
+                onClick={() => handleToggle(task)}
+                className="flex items-center gap-3.5 flex-1 cursor-pointer min-w-0"
+              >
+                <motion.div
+                  whileTap={{ scale: 0.75 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  className={`w-5 h-5 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                    task.isCompleted
+                      ? 'bg-gradient-to-tr from-purple-500 to-pink-500 text-white shadow-sm shadow-purple-500/30'
+                      : 'border border-white/20 hover:border-purple-400'
+                  }`}
                 >
-                  {task.isCompleted ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Circle className="w-4 h-4 text-slate-500 hover:text-cyan-400" />
-                  )}
-                </button>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xs sm:text-sm font-medium truncate ${task.isCompleted ? 'line-through text-slate-500' : 'text-slate-100'}`}>
-                      {task.title}
-                    </p>
-                    {task.syncStatus === 'synced' ? (
-                      <span title="Cloud Synced"><CloudCheck className="w-3.5 h-3.5 text-emerald-400/80 shrink-0" /></span>
-                    ) : (
-                      <span title="Pending Sync"><CloudUpload className="w-3.5 h-3.5 text-amber-400/80 shrink-0" /></span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    <span>{task.dueTime}</span>
-                  </div>
+                  {task.isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                </motion.div>
+
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium truncate ${
+                    task.isCompleted ? 'line-through text-slate-500' : 'text-slate-100'
+                  }`}>
+                    {task.title}
+                  </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => handleDelete(task.id)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-3 shrink-0 pl-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+                  <Clock className="w-3 h-3 text-slate-500" />
+                  <span>{task.dueTime}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {task.syncStatus === 'synced' ? (
+                    <span title="Cloud Synced"><CloudCheck className="w-3.5 h-3.5 text-emerald-400/80" /></span>
+                  ) : (
+                    <span title="Pending Local Sync"><CloudUpload className="w-3.5 h-3.5 text-amber-400/80" /></span>
+                  )}
+
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => handleDelete(task.id)}
+                    className="opacity-60 group-hover:opacity-100 text-slate-500 hover:text-rose-400 p-1 transition-opacity"
+                    title="Delete task"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </motion.button>
+                </div>
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
         {filteredTasks.length === 0 && (
-          <div className="py-12 text-center rounded-2xl border border-dashed border-white/[0.06] text-slate-400 text-xs">
-            No agenda items in this category.
+          <div className="text-center py-16 rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] text-slate-500 space-y-3">
+            <p className="text-sm font-medium text-slate-300">No tasks in this view</p>
+            <p className="text-xs text-slate-500">
+              {filter === 'completed' ? 'Complete your pending agenda items!' : 'Enjoy your day or click "New Task" to plan ahead.'}
+            </p>
           </div>
         )}
       </div>
 
       {/* Add Task Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="w-full max-w-md p-6 rounded-2xl bg-[#0f1117] border border-white/[0.1] shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md p-6 rounded-2xl bg-[#0f0b1a] border border-white/[0.1] shadow-2xl space-y-5"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Create Agenda Item</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white text-xs">✕</button>
+              <h3 className="text-sm font-bold text-white">Create New Agenda Task</h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-400">Task Title</label>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Task Title</label>
                 <input
                   type="text"
-                  placeholder="e.g., Validate PineTime step telemetry"
+                  placeholder="e.g. Gym / Walk, Complete Assignment, Read Paper"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   autoFocus
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-400">Due Schedule</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Due Time</label>
                 <input
                   type="text"
-                  placeholder="e.g., Today 5:00 PM"
+                  placeholder="e.g. Today, 6:00 PM, Tomorrow"
                   value={newDue}
                   onChange={(e) => setNewDue(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
+              <div className="flex justify-end gap-2.5 pt-2">
+                <motion.button
                   type="button"
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setShowAddModal(false)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:bg-white/[0.04]"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200"
                 >
                   Cancel
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950"
+                  whileTap={{ scale: 0.94 }}
+                  disabled={!newTitle.trim()}
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 disabled:opacity-40 text-white shadow-md shadow-purple-500/25"
                 >
                   Save Task
-                </button>
+                </motion.button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
