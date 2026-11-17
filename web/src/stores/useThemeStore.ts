@@ -44,14 +44,14 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
       textSecondary: '#A1A1B5'
     },
     light: {
-      primary: '#9333EA',
-      secondary: '#7E22CE',
-      gradient: 'linear-gradient(135deg, #4F46E5 0%, #9333EA 50%, #DB2777 100%)',
+      primary: '#8B5CF6',
+      secondary: '#7C3AED',
+      gradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%)',
       bgPrimary: '#F8FAFC',
-      bgSecondary: '#F1F5F9',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
-      elevatedBg: '#F3E8FF',
-      border: 'rgba(147, 51, 234, 0.16)',
+      elevatedBg: '#F1F5F9',
+      border: 'rgba(139, 92, 246, 0.14)',
       textPrimary: '#0F172A',
       textSecondary: '#64748B'
     }
@@ -76,12 +76,12 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
     light: {
       primary: '#0284C7',
       secondary: '#0369A1',
-      gradient: 'linear-gradient(135deg, #0369A1 0%, #0284C7 50%, #0EA5E9 100%)',
-      bgPrimary: '#F8FAFC',
-      bgSecondary: '#F0F9FF',
+      gradient: 'linear-gradient(135deg, #0284C7 0%, #06B6D4 50%, #38BDF8 100%)',
+      bgPrimary: '#F0F9FF',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
       elevatedBg: '#E0F2FE',
-      border: 'rgba(2, 132, 199, 0.16)',
+      border: 'rgba(2, 132, 199, 0.14)',
       textPrimary: '#0C4A6E',
       textSecondary: '#64748B'
     }
@@ -107,11 +107,11 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
       primary: '#059669',
       secondary: '#047857',
       gradient: 'linear-gradient(135deg, #047857 0%, #059669 50%, #10B981 100%)',
-      bgPrimary: '#F8FAFC',
-      bgSecondary: '#F0FDF4',
+      bgPrimary: '#F0FDF4',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
       elevatedBg: '#DCFCE7',
-      border: 'rgba(5, 150, 105, 0.16)',
+      border: 'rgba(5, 150, 105, 0.14)',
       textPrimary: '#064E3B',
       textSecondary: '#64748B'
     }
@@ -136,12 +136,12 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
     light: {
       primary: '#EA580C',
       secondary: '#C2410C',
-      gradient: 'linear-gradient(135deg, #C2410C 0%, #EA580C 50%, #F59E0B 100%)',
-      bgPrimary: '#FAFAF9',
-      bgSecondary: '#FFF7ED',
+      gradient: 'linear-gradient(135deg, #EA580C 0%, #F97316 50%, #FBBF24 100%)',
+      bgPrimary: '#FFF7ED',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
       elevatedBg: '#FFEDD5',
-      border: 'rgba(234, 88, 12, 0.16)',
+      border: 'rgba(234, 88, 12, 0.14)',
       textPrimary: '#7C2D12',
       textSecondary: '#78716C'
     }
@@ -166,12 +166,12 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
     light: {
       primary: '#E11D48',
       secondary: '#BE123C',
-      gradient: 'linear-gradient(135deg, #BE123C 0%, #E11D48 50%, #F43F5E 100%)',
-      bgPrimary: '#FAFAF9',
-      bgSecondary: '#FFF1F2',
+      gradient: 'linear-gradient(135deg, #E11D48 0%, #F43F5E 50%, #FB7185 100%)',
+      bgPrimary: '#FFF1F2',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
       elevatedBg: '#FFE4E6',
-      border: 'rgba(225, 29, 72, 0.16)',
+      border: 'rgba(225, 29, 72, 0.14)',
       textPrimary: '#881337',
       textSecondary: '#78716C'
     }
@@ -197,11 +197,11 @@ export const PRESET_THEMES: Record<Exclude<ThemePreset, 'custom'>, ThemePresetCo
       primary: '#0F172A',
       secondary: '#334155',
       gradient: 'linear-gradient(135deg, #0F172A 0%, #334155 50%, #64748B 100%)',
-      bgPrimary: '#FFFFFF',
-      bgSecondary: '#F8FAFC',
+      bgPrimary: '#F8FAFC',
+      bgSecondary: '#FFFFFF',
       cardBg: '#FFFFFF',
-      elevatedBg: '#E2E8F0',
-      border: 'rgba(15, 23, 42, 0.1)',
+      elevatedBg: '#F1F5F9',
+      border: 'rgba(15, 23, 42, 0.08)',
       textPrimary: '#0F172A',
       textSecondary: '#64748B'
     }
@@ -243,6 +243,7 @@ const defaultCustomColors: ThemeColors = {
 }
 
 export function applyThemeToDOM(colors: ThemeColors, isDark: boolean) {
+  if (typeof document === 'undefined') return
   const root = document.documentElement
   
   if (isDark) {
@@ -266,6 +267,14 @@ export function applyThemeToDOM(colors: ThemeColors, isDark: boolean) {
 }
 
 const initialSaved = loadSavedTheme()
+const initialIsDark = initialSaved.mode === 'dark' || (initialSaved.mode === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+const initialPresetConfig = initialSaved.preset !== 'custom' ? PRESET_THEMES[initialSaved.preset] : PRESET_THEMES.aurora
+const initialColors = initialSaved.preset === 'custom' 
+  ? (initialSaved.custom || defaultCustomColors) 
+  : (initialIsDark ? initialPresetConfig.dark : initialPresetConfig.light)
+
+// Run immediately on boot
+applyThemeToDOM(initialColors, initialIsDark)
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   currentPreset: initialSaved.preset || 'aurora',

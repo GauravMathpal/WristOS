@@ -81,7 +81,7 @@ export function App() {
           duration: 18,
           ease: 'easeInOut'
         }}
-        className="fixed top-[-10%] left-[15%] w-[600px] h-[600px] bg-purple-600/[0.08] rounded-full blur-[140px] pointer-events-none"
+        className="ambient-orb fixed top-[-10%] left-[15%] w-[600px] h-[600px] bg-purple-600/[0.08] rounded-full blur-[140px] pointer-events-none"
       />
       <motion.div
         animate={{
@@ -94,7 +94,7 @@ export function App() {
           duration: 22,
           ease: 'easeInOut'
         }}
-        className="fixed bottom-[-10%] right-[10%] w-[650px] h-[650px] bg-pink-600/[0.07] rounded-full blur-[160px] pointer-events-none"
+        className="ambient-orb fixed bottom-[-10%] right-[10%] w-[650px] h-[650px] bg-pink-600/[0.07] rounded-full blur-[160px] pointer-events-none"
       />
 
       {/* Desktop / Tablet Sidebar (Collapsible) */}
