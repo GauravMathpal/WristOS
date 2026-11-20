@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
 
         const systemPrompt = contextBuilder.join("\n")
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`
         const geminiRes = await fetch(geminiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -59,20 +59,25 @@ Deno.serve(async (req) => {
             ],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 250,
+              maxOutputTokens: 1000,
+              thinkingConfig: { thinkingBudget: 0 },
             },
           }),
         })
 
         if (geminiRes.ok) {
           const geminiData = await geminiRes.json()
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+          const parts = geminiData.candidates?.[0]?.content?.parts || []
+          const rawText = parts.find((p: any) => p.text)?.text?.trim()
           if (rawText) {
-            return new Response(JSON.stringify({ reply: rawText, source: "gemini" }), {
+            return new Response(JSON.stringify({ reply: rawText, source: "gemini-3.8-flash" }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
               status: 200,
             })
           }
+        } else {
+          const errBody = await geminiRes.text()
+          console.warn("Gemini API error:", geminiRes.status, errBody)
         }
       } catch (geminiErr) {
         console.warn("Gemini fetch error, falling back to Core Intelligence:", geminiErr)
