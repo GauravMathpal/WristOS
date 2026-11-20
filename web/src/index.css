@@ -5,17 +5,17 @@
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
-    /* Theme Tokens (Default: Aurora Dark) */
+    /* Theme Tokens (Default: Aurora Dark - Deep Cosmos with Neon Glows) */
     --color-primary: #A855F7;
-    --color-secondary: #7C3AED;
+    --color-secondary: #EC4899;
     --gradient-theme: linear-gradient(135deg, #6366F1 0%, #A855F7 50%, #EC4899 100%);
-    --bg-primary: #080812;
-    --bg-secondary: #11111F;
-    --bg-card: #171729;
-    --bg-elevated: #202039;
-    --border-theme: rgba(168, 85, 247, 0.16);
+    --bg-primary: #06040d;
+    --bg-secondary: #0d091a;
+    --bg-card: #130e26;
+    --bg-elevated: #1e1538;
+    --border-theme: rgba(168, 85, 247, 0.28);
     --text-primary: #F8FAFC;
-    --text-secondary: #A1A1B5;
+    --text-secondary: #C4C4D8;
     --ring-track: rgba(255, 255, 255, 0.08);
   }
 
@@ -30,6 +30,70 @@
   }
 }
 
+/* =========================================================================
+   VIBRANT COLOR STYLES & GLOWING EFFECTS
+   ========================================================================= */
+
+.glass-card-premium {
+  background: linear-gradient(180deg, rgba(27, 18, 54, 0.8) 0%, rgba(18, 12, 38, 0.75) 50%, rgba(12, 8, 26, 0.85) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.55), 0 0 25px 0 rgba(168, 85, 247, 0.12), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-premium:hover {
+  border-color: rgba(236, 72, 153, 0.45);
+  box-shadow: 0 16px 45px 0 rgba(0, 0, 0, 0.65), 0 0 35px 0 rgba(236, 72, 153, 0.25), inset 0 1px 2px 0 rgba(255, 255, 255, 0.18);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.45), 0 0 50px rgba(168, 85, 247, 0.2);
+}
+
+.neon-glow-pink {
+  box-shadow: 0 0 25px rgba(236, 72, 153, 0.5), 0 0 50px rgba(236, 72, 153, 0.25);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.45), 0 0 50px rgba(6, 182, 212, 0.2);
+}
+
+.text-gradient-aurora {
+  background: linear-gradient(135deg, #c084fc 0%, #ec4899 50%, #f43f5e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Animated Ribbon Shimmer */
+@keyframes shimmerWave {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  animation: shimmerWave 3.5s infinite ease-in-out;
+}
+
 @keyframes wave {
   0%, 100% { transform: rotate(0deg); }
   20%, 60% { transform: rotate(14deg); }
@@ -42,8 +106,28 @@
   animation: wave 2.2s infinite ease-in-out;
 }
 
+/* Floating Starlight Particle */
+@keyframes floatParticle {
+  0% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-25px) translateX(15px);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.3;
+  }
+}
+
+.floating-star {
+  animation: floatParticle 8s infinite ease-in-out;
+}
+
 /* =========================================================================
-   LIGHT MODE DESIGN SYSTEM OVERRIDES (APPLE / LINEAR GRADE MINIMALISM)
+   LIGHT MODE DESIGN SYSTEM OVERRIDES
    ========================================================================= */
 
 html.light {
@@ -56,15 +140,15 @@ html.light body {
   color: #0f172a !important;
 }
 
-/* Light mode card surfaces: Pure white with soft crisp border & lift shadow */
+html.light .glass-card-premium,
 html.light [class*="bg-white/\[0\."],
 html.light [class*="bg-white/5"],
 html.light [class*="bg-white/10"],
 html.light .glass-card,
 html.light .glass-panel {
-  background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 4px 18px -2px rgba(0, 0, 0, 0.04) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(168, 85, 247, 0.08) !important;
+  border-color: rgba(168, 85, 247, 0.18) !important;
 }
 
 html.light [class*="border-white/"] {
@@ -134,6 +218,7 @@ html.light .bg-\[\#11141c\] {
 }
 
 html.light input[type="text"],
+html.light input[type="password"],
 html.light input[type="email"],
 html.light textarea {
   background-color: #f8fafc !important;
@@ -156,19 +241,11 @@ html.light .bg-\[\#12151e\]\/80 {
 
 /* Ambient Background Glow in Light Mode */
 html.light .ambient-orb {
-  opacity: 0.25 !important;
+  opacity: 0.18 !important;
   mix-blend-mode: multiply !important;
 }
 
-/* Custom Scrollbar in Light Mode */
-html.light ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15) !important;
-}
-html.light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3) !important;
-}
-
-/* Custom Scrollbar in Dark Mode */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -177,7 +254,7 @@ html.light ::-webkit-scrollbar-thumb:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(168, 85, 247, 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {

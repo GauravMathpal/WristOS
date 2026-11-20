@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Play, 
@@ -11,7 +11,6 @@ import {
   Watch, 
   CheckCircle2, 
   Clock, 
-  TrendingUp,
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
@@ -33,11 +32,11 @@ export function FocusScreen() {
   const intervalRef = useRef<number | null>(null)
   const { sendWatchAlert } = useAppStore()
 
-  const modePresets: Record<Exclude<TimerMode, 'stopwatch'>, { name: string; minutes: number; icon: any }> = {
-    pomodoro: { name: 'Pomodoro', minutes: 25, icon: Timer },
-    short_break: { name: 'Short Break', minutes: 5, icon: Coffee },
-    long_break: { name: 'Long Break', minutes: 15, icon: Coffee },
-    deep_work: { name: 'Deep Work', minutes: 45, icon: Flame }
+  const modePresets: Record<Exclude<TimerMode, 'stopwatch'>, { name: string; minutes: number; icon: any; color: string }> = {
+    pomodoro: { name: 'Pomodoro', minutes: 25, icon: Timer, color: 'from-purple-500 to-pink-500' },
+    short_break: { name: 'Short Break', minutes: 5, icon: Coffee, color: 'from-cyan-500 to-blue-500' },
+    long_break: { name: 'Long Break', minutes: 15, icon: Coffee, color: 'from-indigo-500 to-purple-500' },
+    deep_work: { name: 'Deep Work', minutes: 45, icon: Flame, color: 'from-amber-500 to-rose-500' }
   }
 
   const playCompletionChime = () => {
@@ -51,7 +50,7 @@ export function FocusScreen() {
       osc.type = 'sine'
       osc.frequency.setValueAtTime(587.33, ctx.currentTime) // D5
       osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3) // A5
-      gain.gain.setValueAtTime(0.3, ctx.currentTime)
+      gain.gain.setValueAtTime(0.35, ctx.currentTime)
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
       osc.connect(gain)
       gain.connect(ctx.destination)
@@ -160,34 +159,39 @@ export function FocusScreen() {
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#1c123b]/85 via-[#140e2b]/80 to-[#0e0820]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-semibold">PRODUCTIVITY & FLOW</span>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-bold flex items-center gap-1.5">
+              <Timer className="w-3.5 h-3.5 text-pink-400" />
+              <span>PRODUCTIVITY & FLOW</span>
+            </span>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Focus Session</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+            Focus Session
+          </h2>
+          <p className="text-xs text-purple-200/80 font-medium">
             Distraction-free deep work timer with automated PineTime haptic notifications
           </p>
         </div>
 
         {/* Mode Selector Pills */}
-        <div className="flex items-center p-1 rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-x-auto">
+        <div className="flex items-center p-1.5 rounded-2xl bg-[#0d091d]/80 border border-purple-500/25 shadow-inner overflow-x-auto">
           {(Object.keys(modePresets) as (keyof typeof modePresets)[]).map((key) => {
             const isSelected = mode === key
             return (
               <button
                 key={key}
                 onClick={() => handleSelectMode(key)}
-                className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors shrink-0 ${
-                  isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold capitalize transition-colors shrink-0 ${
+                  isSelected ? 'text-white' : 'text-slate-400 hover:text-purple-200'
                 }`}
               >
                 {isSelected && (
                   <motion.div
                     layoutId="focusModePill"
                     transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 shadow-md shadow-purple-600/30"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 shadow-md shadow-pink-600/30"
                   />
                 )}
                 <span className="relative z-10">{modePresets[key].name}</span>
@@ -197,15 +201,15 @@ export function FocusScreen() {
           
           <button
             onClick={() => handleSelectMode('stopwatch')}
-            className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors shrink-0 ${
-              mode === 'stopwatch' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+            className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold capitalize transition-colors shrink-0 ${
+              mode === 'stopwatch' ? 'text-white' : 'text-slate-400 hover:text-purple-200'
             }`}
           >
             {mode === 'stopwatch' && (
               <motion.div
                 layoutId="focusModePill"
                 transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                className="absolute inset-0 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 shadow-md shadow-purple-600/30"
+                className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 shadow-md shadow-pink-600/30"
               />
             )}
             <span className="relative z-10">Stopwatch</span>
@@ -214,17 +218,17 @@ export function FocusScreen() {
       </div>
 
       {/* Main Focus Center Card */}
-      <div className="p-8 sm:p-12 rounded-3xl border border-white/[0.08] bg-gradient-to-b from-white/[0.03] to-white/[0.01] backdrop-blur-2xl flex flex-col items-center justify-center space-y-7 shadow-2xl relative overflow-hidden">
+      <div className="p-8 sm:p-12 rounded-3xl border border-purple-500/30 bg-gradient-to-b from-[#221345]/90 via-[#150d2c]/85 to-[#0b071a]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40 flex flex-col items-center justify-center space-y-7 relative overflow-hidden">
         
         {/* Ambient breathing glow when active */}
         {isRunning && (
           <motion.div
             animate={{
               scale: [1, 1.15, 1],
-              opacity: [0.25, 0.5, 0.25]
+              opacity: [0.3, 0.55, 0.3]
             }}
             transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-            className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-purple-600/35 via-pink-600/35 to-cyan-500/25 blur-3xl pointer-events-none"
+            className="absolute w-80 h-80 rounded-full bg-gradient-to-tr from-purple-600/40 via-pink-600/40 to-cyan-500/30 blur-3xl pointer-events-none"
           />
         )}
 
@@ -233,10 +237,18 @@ export function FocusScreen() {
           <svg width={size} height={size} className="rotate-[-90deg]">
             <defs>
               <linearGradient id="focusMainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#a855f7" />
-                <stop offset="50%" stopColor="#ec4899" />
-                <stop offset="100%" stopColor="#8b5cf6" />
+                <stop offset="0%" stopColor="#38bdf8" />
+                <stop offset="35%" stopColor="#a855f7" />
+                <stop offset="70%" stopColor="#ec4899" />
+                <stop offset="100%" stopColor="#f43f5e" />
               </linearGradient>
+              <filter id="focusGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
             {/* Track background */}
@@ -244,7 +256,7 @@ export function FocusScreen() {
               cx={size / 2}
               cy={size / 2}
               r={radius}
-              stroke="var(--ring-track, rgba(255, 255, 255, 0.07))"
+              stroke="rgba(255, 255, 255, 0.08)"
               strokeWidth={strokeWidth}
               fill="transparent"
             />
@@ -258,6 +270,7 @@ export function FocusScreen() {
               strokeWidth={strokeWidth}
               strokeLinecap="round"
               fill="transparent"
+              filter="url(#focusGlow)"
               strokeDasharray={circumference}
               animate={{ strokeDashoffset }}
               transition={{ duration: 0.5, ease: 'linear' }}
@@ -266,7 +279,7 @@ export function FocusScreen() {
 
           {/* Center countdown numbers */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="text-[11px] font-mono uppercase tracking-widest text-purple-400 font-semibold mb-1">
+            <span className="text-[11px] font-mono uppercase tracking-widest text-purple-400 font-bold mb-1">
               {mode === 'stopwatch' ? 'ELAPSED' : isRunning ? 'FOCUS TIME' : 'READY'}
             </span>
 
@@ -274,181 +287,134 @@ export function FocusScreen() {
               key={formattedTime}
               initial={{ scale: 0.96 }}
               animate={{ scale: 1 }}
-              className="text-5xl font-black tracking-tight text-white font-mono"
+              className="text-5xl font-black tracking-tight text-white font-mono drop-shadow-[0_2px_15px_rgba(236,72,153,0.5)]"
             >
               {formattedTime}
             </motion.div>
 
-            <span className="text-xs text-slate-400 mt-2 font-medium">
-              {isCompleted ? 'Goal reached!' : isRunning ? 'Stay in your zone' : 'Press start to begin'}
+            <span className="text-xs text-purple-300/80 mt-2 font-medium">
+              {isCompleted ? 'Goal reached! Great job.' : isRunning ? 'Stay in your zone' : 'Press start to begin'}
             </span>
           </div>
         </div>
 
         {/* Action Controls (Start / Pause / Reset) */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 relative z-10">
           <motion.button
-            whileHover={{ scale: 1.04 }}
+            whileHover={{ scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.94 }}
             transition={{ type: 'spring', stiffness: 450, damping: 20 }}
             onClick={handleStartPause}
-            className={`flex items-center gap-2.5 px-7 py-3 rounded-2xl text-xs font-bold transition-all shadow-xl ${
+            className={`flex items-center gap-2.5 px-8 py-3.5 rounded-2xl text-xs font-bold transition-all shadow-xl ${
               isRunning
-                ? 'bg-white/[0.08] hover:bg-white/[0.12] text-white border border-white/[0.1]'
-                : 'bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/30'
+                ? 'bg-[#181133] hover:bg-[#201744] text-white border border-purple-500/40 shadow-purple-950/40'
+                : 'bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-pink-500/35'
             }`}
           >
             {isRunning ? (
               <>
-                <Pause className="w-4 h-4" />
-                <span>Pause Session</span>
-              </>
-            ) : isCompleted ? (
-              <>
-                <RotateCcw className="w-4 h-4" />
-                <span>Restart Session</span>
+                <Pause className="w-4 h-4 fill-current" />
+                <span>Pause</span>
               </>
             ) : (
               <>
                 <Play className="w-4 h-4 fill-current" />
-                <span>Start Focus</span>
+                <span>{isCompleted ? 'Start Again' : 'Start Focus'}</span>
               </>
             )}
           </motion.button>
 
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.92 }}
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.94 }}
             transition={{ type: 'spring', stiffness: 450, damping: 20 }}
             onClick={handleReset}
-            className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border border-white/[0.06] transition-all"
-            title="Reset Timer"
+            className="p-3.5 rounded-2xl bg-[#140e29] hover:bg-[#1c133a] text-purple-300 border border-purple-500/30 transition-all shadow-md"
+            title="Reset timer"
           >
             <RotateCcw className="w-4 h-4" />
           </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.92 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-            onClick={() => sendWatchAlert("Focus checkpoint: 15m done")}
-            className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-pink-300 border border-white/[0.06] transition-all"
-            title="Test PineTime Wrist Haptic"
-          >
-            <Watch className="w-4 h-4" />
-          </motion.button>
         </div>
 
-        <AnimatePresence>
-          {isCompleted && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Session complete! PineTime wrist vibration dispatched.</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Focus stats overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-md pt-2 border-t border-purple-500/20">
+          <div className="p-3 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 text-center">
+            <span className="text-[10px] font-mono text-purple-400 uppercase font-semibold">Today's Focus</span>
+            <p className="text-lg font-bold font-mono text-white mt-0.5">{totalFocusMinutesToday} <span className="text-[10px] font-sans">min</span></p>
+          </div>
+          <div className="p-3 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 text-center">
+            <span className="text-[10px] font-mono text-pink-400 uppercase font-semibold">Sessions</span>
+            <p className="text-lg font-bold font-mono text-white mt-0.5">{sessionHistory.length}</p>
+          </div>
+          <div className="p-3 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 text-center col-span-2 sm:col-span-1">
+            <span className="text-[10px] font-mono text-cyan-400 uppercase font-semibold">Watch Sync</span>
+            <p className="text-xs font-bold text-emerald-400 mt-1 flex items-center justify-center gap-1">
+              <Watch className="w-3 h-3" />
+              <span>Haptics Active</span>
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Two Column Layout: Metrics & Session History */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
-        {/* Metric Card 1: Total Focus */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          transition={{ duration: 0.2 }}
-          className="p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl flex flex-col justify-between space-y-3"
-        >
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Focus Today</span>
-          <div className="text-3xl font-extrabold text-white font-mono">
-            {totalFocusMinutesToday} <span className="text-xs font-sans text-slate-400 font-normal">MIN</span>
-          </div>
-          <div className="text-[11px] text-purple-400 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
-            <span>+35 min over daily target</span>
-          </div>
-        </motion.div>
-
-        {/* Metric Card 2: Completed Sessions */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          transition={{ duration: 0.2 }}
-          className="p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl flex flex-col justify-between space-y-3"
-        >
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed Sessions</span>
-          <div className="text-3xl font-extrabold text-white font-mono">
-            {sessionHistory.length} <span className="text-xs font-sans text-slate-400 font-normal">STREAK</span>
-          </div>
-          <div className="text-[11px] text-pink-400 flex items-center gap-1">
-            <Flame className="w-3 h-3" />
-            <span>Optimal Pomodoro cadence</span>
-          </div>
-        </motion.div>
-
-        {/* Metric Card 3: Watch Haptics */}
-        <motion.div
-          whileHover={{ y: -3, scale: 1.01 }}
-          transition={{ duration: 0.2 }}
-          className="p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl flex flex-col justify-between space-y-3"
-        >
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">PineTime Integration</span>
-          <div className="text-sm font-semibold text-white flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>GATT ANS 0x1811 Active</span>
-          </div>
-          <div className="text-[11px] text-slate-400">
-            Automated tactile pulses signal breaks without phone interaction
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Focus Session Log */}
-      <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl space-y-4">
+      {/* Focus Session History */}
+      <div className="p-6 rounded-3xl border border-purple-500/25 bg-gradient-to-b from-[#1b1236]/85 via-[#130d29]/80 to-[#0b081d]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-purple-400" />
-            <h3 className="text-sm font-semibold text-white">Today's Focus Log</h3>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/40 text-purple-300 flex items-center justify-center shadow-[0_0_12px_rgba(168,85,247,0.4)]">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white tracking-tight">Recent Focus History</h3>
+              <p className="text-[11px] text-purple-300/80 font-medium">Logged locally with cloud sync</p>
+            </div>
           </div>
-          <span className="text-xs font-mono text-slate-400">{sessionHistory.length} sessions logged</span>
+
+          <span className="text-xs font-mono font-bold text-pink-400">
+            {sessionHistory.length} recorded
+          </span>
         </div>
 
-        <div className="space-y-2">
-          {sessionHistory.length === 0 ? (
-            <div className="text-center py-6 text-xs text-slate-500">
-              No focus sessions logged yet today. Complete a session to start tracking!
-            </div>
-          ) : (
-            sessionHistory.map((s) => (
-              <div
-                key={s.id}
-                className="group flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.1] transition-colors"
+        {sessionHistory.length === 0 ? (
+          <div className="py-8 text-center text-xs text-purple-300/60 font-medium">
+            No completed focus sessions today yet. Start a session above!
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sessionHistory.slice(0, 5).map((session) => (
+              <motion.div
+                key={session.id}
+                whileHover={{ x: 3 }}
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-[#140e29]/80 border border-purple-500/15 transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-                  <span className="text-xs font-semibold text-slate-200">{s.title}</span>
+                  <div className="w-8 h-8 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-400 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">{session.title}</h4>
+                    <span className="text-[10px] text-purple-300/70 font-mono">
+                      {new Date(session.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
-                  <span className="text-purple-300 font-bold">{s.durationMinutes}m</span>
-                  <span className="text-slate-600">•</span>
-                  <span>{s.completedAt}</span>
+
+                <div className="flex items-center gap-3">
+                  <span className="px-2.5 py-1 rounded-xl text-xs font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    +{session.durationMinutes} min
+                  </span>
                   <button
-                    onClick={() => focusRepository.delete(s.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
-                    title="Delete session"
+                    onClick={() => focusRepository.delete(session.id)}
+                    className="p-1 rounded-lg text-slate-500 hover:text-rose-400 transition-colors"
+                    title="Delete session log"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
-
     </div>
   )
 }

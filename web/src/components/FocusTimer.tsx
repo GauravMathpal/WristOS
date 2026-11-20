@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
-import { Play, Pause, RotateCcw, Timer, CheckCircle2 } from 'lucide-react'
+import { motion } from 'motion/react'
+import { Play, Pause, RotateCcw, Timer } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 
 interface FocusTimerProps {
@@ -12,8 +12,8 @@ interface FocusTimerProps {
 
 export function FocusTimer({
   defaultDurationMinutes = 25,
-  size = 220,
-  strokeWidth = 12,
+  size = 230,
+  strokeWidth = 14,
   className = ''
 }: FocusTimerProps) {
   const [totalSeconds, setTotalSeconds] = useState(defaultDurationMinutes * 60)
@@ -82,21 +82,29 @@ export function FocusTimer({
         {isRunning && (
           <motion.div
             animate={{
-              scale: [1, 1.08, 1],
-              opacity: [0.3, 0.55, 0.3]
+              scale: [1, 1.12, 1],
+              opacity: [0.35, 0.6, 0.35]
             }}
             transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
-            className="absolute inset-4 rounded-full bg-gradient-to-tr from-purple-600/35 to-pink-500/35 blur-2xl pointer-events-none"
+            className="absolute inset-2 rounded-full bg-gradient-to-tr from-purple-600/40 via-pink-600/40 to-cyan-500/30 blur-2xl pointer-events-none"
           />
         )}
 
         <svg width={size} height={size} className="rotate-[-90deg]">
           <defs>
             <linearGradient id="focusTimerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#a855f7" />
-              <stop offset="50%" stopColor="#c084fc" />
-              <stop offset="100%" stopColor="#ec4899" />
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="40%" stopColor="#a855f7" />
+              <stop offset="75%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#f43f5e" />
             </linearGradient>
+            <filter id="timerRingGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
           {/* Background track */}
@@ -104,7 +112,7 @@ export function FocusTimer({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke="var(--ring-track, rgba(255, 255, 255, 0.07))"
+            stroke="rgba(255, 255, 255, 0.08)"
             strokeWidth={strokeWidth}
             fill="transparent"
           />
@@ -118,6 +126,7 @@ export function FocusTimer({
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             fill="transparent"
+            filter="url(#timerRingGlow)"
             strokeDasharray={circumference}
             animate={{ strokeDashoffset }}
             transition={{ duration: 0.5, ease: 'linear' }}
@@ -126,7 +135,7 @@ export function FocusTimer({
 
         {/* Center Countdown Display */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-1">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500/25 to-pink-500/25 border border-purple-400/40 flex items-center justify-center text-pink-300 mb-1 shadow-[0_0_12px_rgba(168,85,247,0.4)]">
             <Timer className="w-4 h-4" />
           </div>
 
@@ -134,12 +143,12 @@ export function FocusTimer({
             key={formattedTime}
             initial={{ scale: 0.96 }}
             animate={{ scale: 1 }}
-            className="text-4xl font-extrabold tracking-tight text-white font-mono"
+            className="text-4xl font-black tracking-tight text-white font-mono drop-shadow-[0_2px_12px_rgba(236,72,153,0.5)]"
           >
             {formattedTime}
           </motion.div>
 
-          <span className="text-[11px] font-medium text-slate-400 tracking-wider uppercase mt-1">
+          <span className="text-[11px] font-bold text-purple-300 tracking-wider uppercase mt-1">
             {isCompleted ? 'Completed!' : isRunning ? 'In Deep Focus' : 'Ready'}
           </span>
         </div>
@@ -153,10 +162,10 @@ export function FocusTimer({
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => resetTimer(mins)}
-            className={`px-3 py-1 rounded-xl text-xs font-mono font-medium transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
               totalSeconds === mins * 60 && !isRunning
-                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                : 'bg-white/[0.03] text-slate-400 hover:text-white border border-white/[0.06]'
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md shadow-pink-500/30'
+                : 'bg-[#140e29] text-purple-300 hover:text-white border border-purple-500/25'
             }`}
           >
             {mins}m
@@ -164,62 +173,41 @@ export function FocusTimer({
         ))}
       </div>
 
-      {/* Primary Control Buttons */}
+      {/* Play / Reset Controls */}
       <div className="flex items-center gap-3 mt-4">
         <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.94 }}
-          transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={handleStartPause}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg ${
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg ${
             isRunning
-              ? 'bg-white/[0.08] hover:bg-white/[0.12] text-white border border-white/[0.1]'
-              : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/25'
+              ? 'bg-[#181133] hover:bg-[#201744] text-white border border-purple-500/40 shadow-purple-950/40'
+              : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-pink-500/30'
           }`}
         >
           {isRunning ? (
             <>
-              <Pause className="w-3.5 h-3.5" />
-              <span>Pause Session</span>
-            </>
-          ) : isCompleted ? (
-            <>
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restart</span>
+              <Pause className="w-3.5 h-3.5 fill-current" />
+              <span>Pause</span>
             </>
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Start Focus</span>
+              <span>{isCompleted ? 'Restart' : 'Start'}</span>
             </>
           )}
         </motion.button>
 
         <motion.button
           whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.92 }}
-          transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => resetTimer(totalSeconds / 60)}
-          className="p-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border border-white/[0.06]"
-          title="Reset Timer"
+          className="p-2.5 rounded-xl bg-[#140e29] hover:bg-[#1c133a] text-purple-300 border border-purple-500/25 transition-all shadow-md"
+          title="Reset timer"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-3.5 h-3.5" />
         </motion.button>
       </div>
-
-      <AnimatePresence>
-        {isCompleted && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center gap-1.5 mt-3 text-xs text-emerald-400 font-medium"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Watch vibration alert dispatched!</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
