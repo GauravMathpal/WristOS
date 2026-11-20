@@ -69,58 +69,44 @@ export function App() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-primary,#06040d)] text-[var(--text-primary,#f8fafc)] font-sans antialiased selection:bg-purple-500/40 selection:text-pink-300 relative">
       
-      {/* VIBRANT ATMOSPHERIC AMBIENT NEBULA GLOWS */}
-      <motion.div
-        animate={{
-          x: [0, 50, -40, 0],
-          y: [0, -40, 30, 0],
-          scale: [1, 1.15, 0.95, 1],
+      {/* VIBRANT ATMOSPHERIC AMBIENT NEBULA GLOWS (Ultra-efficient radial shader, zero GPU memory churn) */}
+      <div 
+        className="fixed inset-0 pointer-events-none overflow-hidden z-0"
+        style={{
+          transform: 'translate3d(0, 0, 0)',
+          backfaceVisibility: 'hidden',
+          contain: 'strict'
         }}
-        transition={{
-          repeat: Infinity,
-          duration: 16,
-          ease: 'easeInOut'
-        }}
-        className="ambient-orb fixed top-[-10%] left-[10%] w-[650px] h-[650px] bg-indigo-600/25 rounded-full blur-[130px] pointer-events-none"
-      />
-      <motion.div
-        animate={{
-          x: [0, -45, 35, 0],
-          y: [0, 40, -30, 0],
-          scale: [1, 0.9, 1.15, 1],
-        }}
-        transition={{
-          repeat: Infinity,
-          duration: 20,
-          ease: 'easeInOut'
-        }}
-        className="ambient-orb fixed bottom-[-10%] right-[10%] w-[700px] h-[700px] bg-pink-600/25 rounded-full blur-[150px] pointer-events-none"
-      />
-      <motion.div
-        animate={{
-          x: [0, 35, -25, 0],
-          y: [0, 25, -35, 0],
-          scale: [1, 1.1, 0.9, 1],
-        }}
-        transition={{
-          repeat: Infinity,
-          duration: 18,
-          ease: 'easeInOut'
-        }}
-        className="ambient-orb fixed top-[30%] right-[30%] w-[500px] h-[500px] bg-purple-600/30 rounded-full blur-[140px] pointer-events-none"
-      />
-      <motion.div
-        animate={{
-          x: [0, -30, 20, 0],
-          y: [0, -20, 25, 0],
-        }}
-        transition={{
-          repeat: Infinity,
-          duration: 14,
-          ease: 'easeInOut'
-        }}
-        className="ambient-orb fixed bottom-[15%] left-[20%] w-[450px] h-[450px] bg-cyan-500/18 rounded-full blur-[120px] pointer-events-none"
-      />
+      >
+        <div 
+          className="absolute top-[-15%] left-[5%] w-[650px] h-[650px] rounded-full pointer-events-none opacity-60"
+          style={{
+            background: 'radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, rgba(79, 70, 229, 0.15) 50%, transparent 70%)',
+            transform: 'translate3d(0, 0, 0)'
+          }}
+        />
+        <div 
+          className="absolute bottom-[-15%] right-[5%] w-[700px] h-[700px] rounded-full pointer-events-none opacity-60"
+          style={{
+            background: 'radial-gradient(circle, rgba(236, 72, 153, 0.35) 0%, rgba(219, 39, 119, 0.15) 50%, transparent 70%)',
+            transform: 'translate3d(0, 0, 0)'
+          }}
+        />
+        <div 
+          className="absolute top-[25%] right-[25%] w-[550px] h-[550px] rounded-full pointer-events-none opacity-50"
+          style={{
+            background: 'radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(124, 58, 237, 0.12) 50%, transparent 70%)',
+            transform: 'translate3d(0, 0, 0)'
+          }}
+        />
+        <div 
+          className="absolute bottom-[18%] left-[15%] w-[480px] h-[480px] rounded-full pointer-events-none opacity-45"
+          style={{
+            background: 'radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, rgba(56, 189, 248, 0.1) 50%, transparent 70%)',
+            transform: 'translate3d(0, 0, 0)'
+          }}
+        />
+      </div>
 
       {/* Floating Starlight Particle Sparkles */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">

@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { useState, useEffect } from 'react'
 
 interface WordRevealProps {
@@ -6,7 +5,7 @@ interface WordRevealProps {
   animate?: boolean
   className?: string
   onComplete?: () => void
-  speed?: number // ms per word, default 40ms
+  speed?: number
 }
 
 export function WordReveal({ 
@@ -14,7 +13,7 @@ export function WordReveal({
   animate = true, 
   className = '', 
   onComplete,
-  speed = 35 
+  speed = 28 
 }: WordRevealProps) {
   const words = text.split(' ')
   const [revealedCount, setRevealedCount] = useState(animate ? 0 : words.length)
@@ -39,31 +38,14 @@ export function WordReveal({
     return () => clearInterval(interval)
   }, [text, animate, speed])
 
-  if (!animate) {
+  if (!animate || revealedCount >= words.length) {
     return <span className={className}>{text}</span>
   }
 
   return (
-    <span className={`inline-block ${className}`}>
-      {words.slice(0, revealedCount).map((word, index) => (
-        <motion.span
-          key={`${word}-${index}`}
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-          className="inline-block mr-[0.28em]"
-        >
-          {word}
-        </motion.span>
-      ))}
-
-      {revealedCount < words.length && (
-        <motion.span
-          animate={{ opacity: [0, 1, 0] }}
-          transition={{ repeat: Infinity, duration: 0.6 }}
-          className="inline-block w-1.5 h-3.5 bg-purple-400 rounded-sm ml-0.5 align-middle"
-        />
-      )}
+    <span className={`inline ${className}`} style={{ contain: 'layout' }}>
+      {words.slice(0, revealedCount).join(' ')}
+      <span className="inline-block w-1.5 h-3.5 bg-pink-400 rounded-sm ml-1 align-middle animate-pulse" />
     </span>
   )
 }
