@@ -19,7 +19,8 @@ import {
   ChevronRight,
   Keyboard,
   Camera,
-  History
+  History,
+  Square
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { BreathingOrb } from './BreathingOrb'
@@ -38,9 +39,42 @@ export function AssistantScreen() {
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [ttsEnabled, setTtsEnabled] = useState(true)
+  // Voice response defaults to false so assistant replies in chat 1st without speaking
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wristos_tts_enabled') === 'true'
+    }
+    return false
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'orb' | 'chat'>('orb')
+
+  // Cancel any speech synthesis on component unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+    setIsSpeaking(false)
+  }
+
+  const toggleTts = () => {
+    const next = !ttsEnabled
+    setTtsEnabled(next)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wristos_tts_enabled', String(next))
+    }
+    if (!next) {
+      stopSpeaking()
+    }
+  }
 
   const tasks = useLiveQuery(() => db.tasks.filter(t => !t.deletedAt).toArray(), []) || []
   const memories = useLiveQuery(() => db.memories.filter(m => !m.deletedAt).toArray(), []) || []
@@ -192,6 +226,24 @@ export function AssistantScreen() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Active "Stop Voice" button when AI is speaking */}
+          <AnimatePresence>
+            {isSpeaking && (
+              <motion.button
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={stopSpeaking}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse"
+                title="Stop AI Voice"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>Stop Voice</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           {messages.length > 1 && (
             <motion.button
               whileTap={{ scale: 0.94 }}
@@ -203,17 +255,19 @@ export function AssistantScreen() {
             </motion.button>
           )}
 
+          {/* Voice Auto-Reply Toggle (Default: Muted / Chat 1st) */}
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={() => setTtsEnabled(!ttsEnabled)}
-            className={`p-2 rounded-xl text-xs font-medium border transition-all ${
+            onClick={toggleTts}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
               ttsEnabled 
-                ? 'bg-purple-500/20 text-pink-300 border-purple-500/30' 
-                : 'bg-white/[0.04] text-slate-500 border-white/[0.06]'
+                ? 'bg-gradient-to-r from-purple-500/25 to-pink-500/20 text-pink-300 border-pink-500/40 shadow-sm' 
+                : 'bg-[#140e29] text-purple-300/70 border-purple-500/25 hover:text-white'
             }`}
-            title={ttsEnabled ? "Mute Voice Responses" : "Unmute Voice Responses"}
+            title={ttsEnabled ? "Voice Auto-Reply: ON (Click to mute)" : "Voice Auto-Reply: OFF (Replies in chat only)"}
           >
-            {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {ttsEnabled ? <Volume2 className="w-3.5 h-3.5 text-pink-400" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{ttsEnabled ? 'Voice: On' : 'Voice: Muted'}</span>
           </motion.button>
         </div>
       </div>
@@ -341,16 +395,51 @@ export function AssistantScreen() {
                       )}
                     </div>
 
-                    {m.actionBadge && (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold shadow-[0_0_10px_rgba(52,211,153,0.2)]"
-                      >
-                        <Zap className="w-3 h-3 text-emerald-400" />
-                        <span>{m.actionBadge}</span>
-                      </motion.div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {m.role === 'assistant' && (
+                        <button
+                          onClick={() => {
+                            if (isSpeaking) {
+                              stopSpeaking()
+                            } else {
+                              if ('speechSynthesis' in window) {
+                                window.speechSynthesis.cancel()
+                                const utterance = new SpeechSynthesisUtterance(m.text)
+                                utterance.onstart = () => setIsSpeaking(true)
+                                utterance.onend = () => setIsSpeaking(false)
+                                utterance.onerror = () => setIsSpeaking(false)
+                                window.speechSynthesis.speak(utterance)
+                              }
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-300/80 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-lg bg-[#140e29] border border-purple-500/20 hover:border-purple-500/40"
+                          title={isSpeaking ? "Stop Voice" : "Listen to response"}
+                        >
+                          {isSpeaking ? (
+                            <>
+                              <Square className="w-2.5 h-2.5 fill-current text-rose-400" />
+                              <span className="text-rose-400">Stop</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="w-2.5 h-2.5 text-purple-400" />
+                              <span>Listen</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {m.actionBadge && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold shadow-[0_0_10px_rgba(52,211,153,0.2)]"
+                        >
+                          <Zap className="w-3 h-3 text-emerald-400" />
+                          <span>{m.actionBadge}</span>
+                        </motion.div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               ))}

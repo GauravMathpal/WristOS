@@ -19,7 +19,8 @@ import {
   AlertCircle, 
   WifiOff, 
   RotateCcw,
-  Sliders
+  Sliders,
+  Volume2
 } from 'lucide-react'
 import { db } from '../lib/db'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -36,11 +37,28 @@ export function SettingsScreen() {
   const [customPrimary, setCustomPrimary] = useState(customColors.primary)
   const [customSecondary, setCustomSecondary] = useState(customColors.secondary)
 
-  // Hardware toggles
+  // Hardware & Voice toggles
   const [autoSync, setAutoSync] = useState(true)
   const [notifications, setNotifications] = useState(true)
   const [wristVibrate, setWristVibrate] = useState(true)
   const [exportNotice, setExportNotice] = useState<string | null>(null)
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wristos_tts_enabled') === 'true'
+    }
+    return false
+  })
+
+  const handleToggleTts = () => {
+    const next = !ttsEnabled
+    setTtsEnabled(next)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wristos_tts_enabled', String(next))
+      if (!next && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }
 
   // Auth & Sync state
   const { user, signInWithOtp, signInAnonymously, signOut } = useAuthStore()
@@ -850,6 +868,25 @@ export function SettingsScreen() {
                   className={`w-12 h-6 rounded-full p-0.5 transition-colors ${wristVibrate ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-md shadow-pink-500/40' : 'bg-slate-800'}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${wristVibrate ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-purple-500/20 bg-[#140e29]/80">
+                <div>
+                  <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-pink-400" />
+                    <span>AI Voice Responses (Speech Synthesis)</span>
+                  </p>
+                  <p className="text-[11px] text-purple-200/80 font-medium">
+                    {ttsEnabled ? 'AI reads responses aloud automatically' : 'AI replies in chat text first without auto-speaking'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleTts}
+                  className={`w-12 h-6 rounded-full p-0.5 transition-colors ${ttsEnabled ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-md shadow-pink-500/40' : 'bg-slate-800'}`}
+                  title={ttsEnabled ? "Mute Voice Responses" : "Enable Voice Auto-Play"}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${ttsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                 </button>
               </div>
             </div>
