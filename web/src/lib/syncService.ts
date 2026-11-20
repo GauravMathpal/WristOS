@@ -1,8 +1,20 @@
-import { db, TaskRecord, MemoryRecord } from './db'
+import { 
+  db, 
+  TaskRecord, 
+  MemoryRecord, 
+  FocusSessionRecord, 
+  ActivityRecord
+} from './db'
 import { supabase, isSupabaseConfigured } from './supabase'
 import { useAuthStore } from '../stores/useAuthStore'
 
 export type SyncState = 'idle' | 'syncing' | 'synced' | 'offline' | 'error'
+
+export interface SyncStats {
+  state: SyncState
+  lastSyncTime: number
+  pendingCount: number
+}
 
 class SyncService {
   private syncState: SyncState = 'idle'
@@ -14,6 +26,13 @@ class SyncService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => this.triggerSync())
       window.addEventListener('offline', () => this.updateState('offline'))
+
+      // Periodic sync every 60s
+      window.setInterval(() => {
+        if (navigator.onLine && useAuthStore.getState().user) {
+          this.triggerSync()
+        }
+      }, 60000)
     }
   }
 
@@ -26,6 +45,17 @@ class SyncService {
   private updateState(state: SyncState) {
     this.syncState = state
     this.subscribers.forEach((fn) => fn(state, this.lastSyncTime))
+  }
+
+  public async getPendingCount(): Promise<number> {
+    const [pTasks, pMems, pFocus, pAct, pSet] = await Promise.all([
+      db.tasks.where('syncStatus').equals('pending').count(),
+      db.memories.where('syncStatus').equals('pending').count(),
+      db.focusSessions.where('syncStatus').equals('pending').count(),
+      db.activityLogs.where('syncStatus').equals('pending').count(),
+      db.userSettings.where('syncStatus').equals('pending').count()
+    ])
+    return pTasks + pMems + pFocus + pAct + pSet
   }
 
   public async triggerSync(): Promise<void> {
@@ -50,7 +80,9 @@ class SyncService {
     this.updateState('syncing')
 
     try {
-      // 1. PUSH: Upload pending local tasks to Supabase
+      // ----------------------------------------------------
+      // 1. PUSH: Tasks
+      // ----------------------------------------------------
       const pendingTasks = await db.tasks.where('syncStatus').equals('pending').toArray()
       for (const t of pendingTasks) {
         const payload = {
@@ -72,7 +104,9 @@ class SyncService {
         }
       }
 
-      // 2. PUSH: Upload pending local memories to Supabase
+      // ----------------------------------------------------
+      // 2. PUSH: Memories
+      // ----------------------------------------------------
       const pendingMemories = await db.memories.where('syncStatus').equals('pending').toArray()
       for (const m of pendingMemories) {
         const payload = {
@@ -90,7 +124,78 @@ class SyncService {
         }
       }
 
-      // 3. PULL: Fetch remote tasks updated since last pull
+      // ----------------------------------------------------
+      // 3. PUSH: Focus Sessions
+      // ----------------------------------------------------
+      const pendingFocus = await db.focusSessions.where('syncStatus').equals('pending').toArray()
+      for (const f of pendingFocus) {
+        const payload = {
+          id: f.id,
+          user_id: user.id,
+          title: f.title,
+          duration_minutes: f.durationMinutes,
+          mode: f.mode,
+          completed_at: f.completedAt,
+          created_at: f.createdAt,
+          updated_at: f.updatedAt,
+          deleted_at: f.deletedAt || null
+        }
+        const { error } = await supabase.from('focus_sessions').upsert(payload)
+        if (!error) {
+          await db.focusSessions.update(f.id, { syncStatus: 'synced' })
+        }
+      }
+
+      // ----------------------------------------------------
+      // 4. PUSH: Activity Logs
+      // ----------------------------------------------------
+      const pendingActivities = await db.activityLogs.where('syncStatus').equals('pending').toArray()
+      for (const a of pendingActivities) {
+        const payload = {
+          id: a.id,
+          user_id: user.id,
+          date: a.date,
+          steps: a.steps,
+          step_goal: a.stepGoal,
+          heart_rate_avg: a.heartRateAvg,
+          calories: a.calories,
+          distance_km: a.distanceKm,
+          active_minutes: a.activeMinutes,
+          created_at: a.createdAt,
+          updated_at: a.updatedAt,
+          deleted_at: a.deletedAt || null
+        }
+        const { error } = await supabase.from('activity_logs').upsert(payload)
+        if (!error) {
+          await db.activityLogs.update(a.id, { syncStatus: 'synced' })
+        }
+      }
+
+      // ----------------------------------------------------
+      // 5. PUSH: User Settings
+      // ----------------------------------------------------
+      const pendingSettings = await db.userSettings.where('syncStatus').equals('pending').toArray()
+      for (const s of pendingSettings) {
+        const payload = {
+          user_id: user.id,
+          preset: s.preset,
+          mode: s.mode,
+          custom_primary: s.customPrimary,
+          custom_secondary: s.customSecondary,
+          auto_sync: s.autoSync,
+          notifications: s.notifications,
+          wrist_vibrate: s.wristVibrate,
+          updated_at: s.updatedAt
+        }
+        const { error } = await supabase.from('user_settings').upsert(payload)
+        if (!error) {
+          await db.userSettings.update(s.userId, { syncStatus: 'synced' })
+        }
+      }
+
+      // ----------------------------------------------------
+      // 6. PULL: Tasks updated since last pull
+      // ----------------------------------------------------
       const lastPullMeta = await db.syncMeta.get('last_task_pull')
       const lastPullTime = Number(lastPullMeta?.value || 0)
 
@@ -102,7 +207,6 @@ class SyncService {
       if (!taskPullError && remoteTasks) {
         for (const rt of remoteTasks) {
           const local = await db.tasks.get(rt.id)
-          // If local has newer unsynced changes, do not overwrite (LWW)
           if (local && local.syncStatus === 'pending' && local.updatedAt > rt.updated_at) {
             continue
           }
@@ -125,7 +229,9 @@ class SyncService {
         await db.syncMeta.put({ key: 'last_task_pull', value: Date.now() })
       }
 
-      // 4. PULL: Fetch remote memories updated since last pull
+      // ----------------------------------------------------
+      // 7. PULL: Memories updated since last pull
+      // ----------------------------------------------------
       const lastMemMeta = await db.syncMeta.get('last_memory_pull')
       const lastMemPullTime = Number(lastMemMeta?.value || 0)
 
@@ -153,6 +259,77 @@ class SyncService {
           await db.memories.put(localMem)
         }
         await db.syncMeta.put({ key: 'last_memory_pull', value: Date.now() })
+      }
+
+      // ----------------------------------------------------
+      // 8. PULL: Focus Sessions updated since last pull
+      // ----------------------------------------------------
+      const lastFocusMeta = await db.syncMeta.get('last_focus_pull')
+      const lastFocusPullTime = Number(lastFocusMeta?.value || 0)
+
+      const { data: remoteFocus, error: focusPullError } = await supabase
+        .from('focus_sessions')
+        .select('*')
+        .gt('updated_at', lastFocusPullTime)
+
+      if (!focusPullError && remoteFocus) {
+        for (const rf of remoteFocus) {
+          const local = await db.focusSessions.get(rf.id)
+          if (local && local.syncStatus === 'pending' && local.updatedAt > rf.updated_at) {
+            continue
+          }
+
+          const localFocus: FocusSessionRecord = {
+            id: rf.id,
+            title: rf.title,
+            durationMinutes: rf.duration_minutes,
+            mode: rf.mode,
+            completedAt: rf.completed_at,
+            createdAt: rf.created_at,
+            updatedAt: rf.updated_at,
+            deletedAt: rf.deleted_at,
+            syncStatus: 'synced'
+          }
+          await db.focusSessions.put(localFocus)
+        }
+        await db.syncMeta.put({ key: 'last_focus_pull', value: Date.now() })
+      }
+
+      // ----------------------------------------------------
+      // 9. PULL: Activity Logs updated since last pull
+      // ----------------------------------------------------
+      const lastActMeta = await db.syncMeta.get('last_activity_pull')
+      const lastActPullTime = Number(lastActMeta?.value || 0)
+
+      const { data: remoteActivities, error: actPullError } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .gt('updated_at', lastActPullTime)
+
+      if (!actPullError && remoteActivities) {
+        for (const ra of remoteActivities) {
+          const local = await db.activityLogs.get(ra.id)
+          if (local && local.syncStatus === 'pending' && local.updatedAt > ra.updated_at) {
+            continue
+          }
+
+          const localAct: ActivityRecord = {
+            id: ra.id,
+            date: ra.date,
+            steps: ra.steps,
+            stepGoal: ra.step_goal,
+            heartRateAvg: ra.heart_rate_avg,
+            calories: ra.calories,
+            distanceKm: Number(ra.distance_km),
+            activeMinutes: ra.active_minutes,
+            createdAt: ra.created_at,
+            updatedAt: ra.updated_at,
+            deletedAt: ra.deleted_at,
+            syncStatus: 'synced'
+          }
+          await db.activityLogs.put(localAct)
+        }
+        await db.syncMeta.put({ key: 'last_activity_pull', value: Date.now() })
       }
 
       this.lastSyncTime = Date.now()

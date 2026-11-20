@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Play, 
   Pause, 
@@ -10,18 +11,13 @@ import {
   Watch, 
   CheckCircle2, 
   Clock, 
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
+import { focusRepository } from '../lib/repository'
 
 type TimerMode = 'pomodoro' | 'short_break' | 'long_break' | 'deep_work' | 'stopwatch'
-
-interface FocusSessionRecord {
-  id: string
-  title: string
-  durationMinutes: number
-  completedAt: string
-}
 
 export function FocusScreen() {
   const [mode, setMode] = useState<TimerMode>('pomodoro')
@@ -31,12 +27,8 @@ export function FocusScreen() {
   const [isCompleted, setIsCompleted] = useState(false)
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0)
 
-  // Focus history
-  const [sessionHistory, setSessionHistory] = useState<FocusSessionRecord[]>([
-    { id: '1', title: 'Data Structures Revision', durationMinutes: 25, completedAt: '10:30 AM' },
-    { id: '2', title: 'C Algorithm Debugging', durationMinutes: 45, completedAt: '2:15 PM' },
-    { id: '3', title: 'System Architecture Notes', durationMinutes: 25, completedAt: '4:45 PM' }
-  ])
+  // Focus history from Dexie local database with live reactive updates
+  const sessionHistory = useLiveQuery(() => focusRepository.getAllActive()) || []
 
   const intervalRef = useRef<number | null>(null)
   const { sendWatchAlert } = useAppStore()
@@ -62,17 +54,13 @@ export function FocusScreen() {
               setIsCompleted(true)
               sendWatchAlert("Focus Session Complete! Take a break.")
               
-              // Record history
+              // Record history to Dexie local database and trigger sync
               const duration = Math.round(totalSeconds / 60)
-              setSessionHistory((h) => [
-                {
-                  id: String(Date.now()),
-                  title: `${modePresets[mode as keyof typeof modePresets]?.name || 'Focus'} Session`,
-                  durationMinutes: duration,
-                  completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                },
-                ...h
-              ])
+              focusRepository.add(
+                `${modePresets[mode as keyof typeof modePresets]?.name || 'Focus'} Session`,
+                duration,
+                mode
+              )
               return 0
             }
             return prev - 1
@@ -406,22 +394,35 @@ export function FocusScreen() {
         </div>
 
         <div className="space-y-2">
-          {sessionHistory.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-                <span className="text-xs font-semibold text-slate-200">{s.title}</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
-                <span className="text-purple-300 font-bold">{s.durationMinutes}m</span>
-                <span className="text-slate-600">•</span>
-                <span>{s.completedAt}</span>
-              </div>
+          {sessionHistory.length === 0 ? (
+            <div className="text-center py-6 text-xs text-slate-500">
+              No focus sessions logged yet today. Complete a session to start tracking!
             </div>
-          ))}
+          ) : (
+            sessionHistory.map((s) => (
+              <div
+                key={s.id}
+                className="group flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.1] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                  <span className="text-xs font-semibold text-slate-200">{s.title}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
+                  <span className="text-purple-300 font-bold">{s.durationMinutes}m</span>
+                  <span className="text-slate-600">•</span>
+                  <span>{s.completedAt}</span>
+                  <button
+                    onClick={() => focusRepository.delete(s.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
+                    title="Delete session"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

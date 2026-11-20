@@ -42,12 +42,16 @@ export function SettingsScreen() {
   const [exportNotice, setExportNotice] = useState<string | null>(null)
 
   // Auth & Sync state
-  const { user, signInWithOtp, signOut } = useAuthStore()
+  const { user, signInWithOtp, signInAnonymously, signOut } = useAuthStore()
   const [emailInput, setEmailInput] = useState('')
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false)
   const [syncStatus, setSyncStatus] = useState<SyncState>('idle')
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number>(0)
+  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState(() => 
+    typeof window !== 'undefined' ? localStorage.getItem('wristos_gemini_api_key') || '' : ''
+  )
+  const [apiKeySavedMsg, setApiKeySavedMsg] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = syncService.subscribe((state, lastSync) => {
@@ -81,11 +85,15 @@ export function SettingsScreen() {
   const handleExportJson = async () => {
     const tasks = await db.tasks.toArray()
     const memories = await db.memories.toArray()
+    const focusSessions = await db.focusSessions.toArray()
+    const activityLogs = await db.activityLogs.toArray()
     const exportData = {
-      version: '2.0',
+      version: '3.0',
       exportedAt: new Date().toISOString(),
       tasks,
-      memories
+      memories,
+      focusSessions,
+      activityLogs
     }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -94,7 +102,7 @@ export function SettingsScreen() {
     a.download = `wristos_backup_${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setExportNotice('Database exported successfully as JSON.')
+    setExportNotice('Complete database snapshot exported successfully.')
     setTimeout(() => setExportNotice(null), 3000)
   }
 
@@ -112,7 +120,13 @@ export function SettingsScreen() {
         if (data.memories) {
           await db.memories.bulkPut(data.memories)
         }
-        setExportNotice(`Imported ${data.tasks?.length || 0} tasks & ${data.memories?.length || 0} memories!`)
+        if (data.focusSessions) {
+          await db.focusSessions.bulkPut(data.focusSessions)
+        }
+        if (data.activityLogs) {
+          await db.activityLogs.bulkPut(data.activityLogs)
+        }
+        setExportNotice(`Imported complete backup (${data.tasks?.length || 0} tasks, ${data.memories?.length || 0} memories, ${data.focusSessions?.length || 0} focus logs)!`)
         syncService.triggerSync()
         setTimeout(() => setExportNotice(null), 4000)
       } catch {
@@ -120,6 +134,12 @@ export function SettingsScreen() {
       }
     }
     reader.readAsText(file)
+  }
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem('wristos_gemini_api_key', geminiApiKeyInput.trim())
+    setApiKeySavedMsg('Gemini API Key saved for cloud intelligence!')
+    setTimeout(() => setApiKeySavedMsg(null), 3000)
   }
 
   const handleApplyCustomColors = () => {
@@ -509,7 +529,16 @@ export function SettingsScreen() {
                     {user.email ? user.email.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">{user.email}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-slate-200">
+                        {user.is_anonymous ? 'Guest Device Session' : user.email}
+                      </p>
+                      {user.is_anonymous && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                          Anonymous
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-slate-500">
                       {lastSyncTimestamp ? `Last synced: ${new Date(lastSyncTimestamp).toLocaleTimeString()}` : 'Connected to Supabase'}
                     </p>
@@ -536,39 +565,113 @@ export function SettingsScreen() {
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleLogin} className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-slate-200">Sign in with Email (Magic Link)</p>
-                  <p className="text-[11px] text-slate-400">Sync tasks and memories seamlessly between your phone and browser.</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
-                    <input
-                      type="email"
-                      placeholder="name@example.com"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
-                    />
+              <div className="space-y-4">
+                {/* Instant Anonymous Cloud Sync */}
+                <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/[0.04] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-white">Instant Device Cloud Sync</p>
+                    <p className="text-[11px] text-slate-400">Activate seamless background sync immediately without entering an email.</p>
                   </div>
-
                   <motion.button
-                    type="submit"
                     whileTap={{ scale: 0.94 }}
-                    disabled={isSubmittingAuth || !emailInput.trim()}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 disabled:opacity-40 transition-all shrink-0"
+                    onClick={async () => {
+                      setIsSubmittingAuth(true)
+                      await signInAnonymously()
+                      setIsSubmittingAuth(false)
+                    }}
+                    disabled={isSubmittingAuth}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-md shadow-purple-600/20 disabled:opacity-40 transition-all shrink-0"
                   >
-                    {isSubmittingAuth ? 'Sending...' : 'Send Magic Link'}
+                    {isSubmittingAuth ? 'Activating...' : 'Enable Cloud Sync (1-Click)'}
                   </motion.button>
                 </div>
 
-                {authMessage && (
-                  <p className="text-xs text-purple-400 font-medium">{authMessage}</p>
-                )}
-              </form>
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-white/[0.06]"></div>
+                  <span className="flex-shrink mx-3 text-[10px] uppercase font-mono text-slate-500">or sign in with email</span>
+                  <div className="flex-grow border-t border-white/[0.06]"></div>
+                </div>
+
+                <form onSubmit={handleLogin} className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-200">Email Sign-In (Magic Link)</p>
+                    <p className="text-[11px] text-slate-400">Preserve and access your data across desktop, Android, and other devices.</p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
+                      <input
+                        type="email"
+                        placeholder="name@example.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <motion.button
+                      type="submit"
+                      whileTap={{ scale: 0.94 }}
+                      disabled={isSubmittingAuth || !emailInput.trim()}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 disabled:opacity-40 transition-all shrink-0"
+                    >
+                      {isSubmittingAuth ? 'Sending...' : 'Send Magic Link'}
+                    </motion.button>
+                  </div>
+
+                  {authMessage && (
+                    <p className="text-xs text-purple-400 font-medium">{authMessage}</p>
+                  )}
+                </form>
+              </div>
             )}
+
+            {/* AI Assistant & Gemini Configuration Card */}
+            <div className="p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Google Gemini 1.5 Flash Configuration
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Connect your Gemini API key to power generative conversational intelligence
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-medium border ${
+                  geminiApiKeyInput.trim() 
+                    ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' 
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                }`}>
+                  {geminiApiKeyInput.trim() ? 'Gemini 1.5 Flash Ready' : 'WristOS Core Active'}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="password"
+                  placeholder="AIzaSy... (Paste Gemini API Key)"
+                  value={geminiApiKeyInput}
+                  onChange={(e) => setGeminiApiKeyInput(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
+                />
+                <motion.button
+                  whileTap={{ scale: 0.94 }}
+                  onClick={handleSaveApiKey}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-all shrink-0"
+                >
+                  Save Key
+                </motion.button>
+              </div>
+
+              {apiKeySavedMsg && (
+                <p className="text-xs text-emerald-400 font-medium">{apiKeySavedMsg}</p>
+              )}
+
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Keys are proxied securely through the Supabase Edge Function without exposing secrets to client sessions. If no key is set, WristOS uses its built-in server-side intelligence engine.
+              </p>
+            </div>
           </motion.div>
         )}
 

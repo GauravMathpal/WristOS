@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import { User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { syncService } from '../lib/syncService'
 
 interface AuthState {
   user: User | null
   isLoading: boolean
   isConfigured: boolean
   setUser: (user: User | null) => void
+  signInAnonymously: () => Promise<{ error: Error | null }>
   signInWithOtp: (email: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
@@ -16,7 +18,25 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   isConfigured: isSupabaseConfigured,
 
-  setUser: (user) => set({ user, isLoading: false }),
+  setUser: (user) => {
+    set({ user, isLoading: false })
+    if (user) {
+      // Auto-trigger sync when user becomes available
+      setTimeout(() => syncService.triggerSync(), 300)
+    }
+  },
+
+  signInAnonymously: async () => {
+    if (!isSupabaseConfigured) {
+      return { error: new Error('Supabase credentials not configured in .env') }
+    }
+    const { data, error } = await supabase.auth.signInAnonymously()
+    if (!error && data?.user) {
+      set({ user: data.user, isLoading: false })
+      syncService.triggerSync()
+    }
+    return { error }
+  },
 
   signInWithOtp: async (email: string) => {
     if (!isSupabaseConfigured) {
@@ -39,7 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   }
 }))
 
-// Auto-initialize auth listener
+// Auto-initialize auth session listener
 if (isSupabaseConfigured) {
   supabase.auth.getSession().then(({ data: { session } }) => {
     useAuthStore.getState().setUser(session?.user || null)

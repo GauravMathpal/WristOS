@@ -24,6 +24,47 @@ export interface MemoryRecord {
   syncStatus: 'synced' | 'pending' | 'failed'
 }
 
+export interface FocusSessionRecord {
+  id: string
+  title: string
+  durationMinutes: number
+  mode: string
+  completedAt: string
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface ActivityRecord {
+  id: string
+  date: string // YYYY-MM-DD
+  steps: number
+  stepGoal: number
+  heartRateAvg: number
+  calories: number
+  distanceKm: number
+  activeMinutes: number
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface UserSettingsRecord {
+  userId: string
+  preset: string
+  mode: string
+  customPrimary: string
+  customSecondary: string
+  autoSync: boolean
+  notifications: boolean
+  wristVibrate: boolean
+  geminiApiKey?: string
+  updatedAt: number
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
 export interface SyncMeta {
   key: string
   value: string | number
@@ -32,6 +73,9 @@ export interface SyncMeta {
 const db = new Dexie('WristOSDatabase') as Dexie & {
   tasks: EntityTable<TaskRecord, 'id'>
   memories: EntityTable<MemoryRecord, 'id'>
+  focusSessions: EntityTable<FocusSessionRecord, 'id'>
+  activityLogs: EntityTable<ActivityRecord, 'id'>
+  userSettings: EntityTable<UserSettingsRecord, 'userId'>
   syncMeta: EntityTable<SyncMeta, 'key'>
 }
 
@@ -58,6 +102,16 @@ db.version(2).stores({
     memory.deletedAt = memory.deletedAt || null
     memory.syncStatus = 'pending'
   })
+})
+
+// Version 3: Expanded with Focus Sessions, Activity Logs, and User Settings
+db.version(3).stores({
+  tasks: 'id, title, isCompleted, createdAt, updatedAt, deletedAt, syncStatus',
+  memories: 'id, tag, fact, createdAt, updatedAt, deletedAt, syncStatus',
+  focusSessions: 'id, title, mode, durationMinutes, completedAt, createdAt, updatedAt, deletedAt, syncStatus',
+  activityLogs: 'id, date, steps, createdAt, updatedAt, deletedAt, syncStatus',
+  userSettings: 'userId, updatedAt, syncStatus',
+  syncMeta: 'key'
 })
 
 export { db }

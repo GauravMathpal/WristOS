@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Heart, 
   ChevronDown, 
@@ -9,6 +10,7 @@ import {
 import { ActivityRing } from './ActivityRing'
 import { FocusTimer } from './FocusTimer'
 import { useAppStore } from '../stores/useAppStore'
+import { activityRepository } from '../lib/repository'
 
 export function HealthScreen() {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'activity' | 'heart' | 'focus'>('overview')
@@ -18,16 +20,43 @@ export function HealthScreen() {
   const displaySteps = watch.stepCount > 0 ? watch.stepCount : 7842
   const displayHeartRate = watch.heartRate > 0 ? watch.heartRate : 78
 
-  // Days for the activity trend bar chart
-  const weeklyData = [
-    { day: 'Mon', percent: 45, steps: '4,500' },
-    { day: 'Tue', percent: 65, steps: '6,500' },
-    { day: 'Wed', percent: 50, steps: '5,000' },
-    { day: 'Thu', percent: 85, steps: '8,500' },
-    { day: 'Fri', percent: 95, steps: '9,500', isToday: true },
-    { day: 'Sat', percent: 60, steps: '6,000' },
-    { day: 'Sun', percent: 40, steps: '4,000' }
-  ]
+  // Live weekly logs from Dexie
+  const weeklyLogs = useLiveQuery(() => activityRepository.getWeekly()) || []
+
+  // Auto-record today's biometrics to Dexie
+  useEffect(() => {
+    activityRepository.recordDailyMetrics({
+      steps: displaySteps,
+      heartRateAvg: displayHeartRate
+    })
+  }, [displaySteps, displayHeartRate])
+
+  // Map weekly logs into the bar chart or fallback to standard week
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const todayIndex = new Date().getDay()
+  const todayDayName = dayNames[todayIndex]
+
+  const weeklyData = weeklyLogs.length >= 7 
+    ? weeklyLogs.slice(-7).map((log) => {
+        const d = new Date(log.date)
+        const day = dayNames[d.getDay()]
+        const percent = Math.min(100, Math.round((log.steps / log.stepGoal) * 100))
+        return {
+          day,
+          percent,
+          steps: log.steps.toLocaleString(),
+          isToday: day === todayDayName
+        }
+      })
+    : [
+        { day: 'Mon', percent: 45, steps: '4,500', isToday: todayDayName === 'Mon' },
+        { day: 'Tue', percent: 65, steps: '6,500', isToday: todayDayName === 'Tue' },
+        { day: 'Wed', percent: 50, steps: '5,000', isToday: todayDayName === 'Wed' },
+        { day: 'Thu', percent: 85, steps: '8,500', isToday: todayDayName === 'Thu' },
+        { day: 'Fri', percent: 95, steps: '9,500', isToday: todayDayName === 'Fri' },
+        { day: 'Sat', percent: 60, steps: '6,000', isToday: todayDayName === 'Sat' },
+        { day: 'Sun', percent: 40, steps: '4,000', isToday: todayDayName === 'Sun' }
+      ]
 
   return (
     <div className="space-y-6">
