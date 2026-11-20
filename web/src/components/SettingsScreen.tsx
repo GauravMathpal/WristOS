@@ -711,10 +711,10 @@ export function SettingsScreen() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                    Google Gemini 1.5 Flash Configuration
+                    Google Gemini 3.8 Flash Cloud Engine
                   </h4>
                   <p className="text-[11px] text-purple-200/80 mt-0.5 font-medium">
-                    Optional Gemini API key for external LLM generative completion
+                    Optimized Edge proxy with zero-budget thinking, token limits & anti-hallucination guardrails
                   </p>
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border ${
@@ -722,7 +722,7 @@ export function SettingsScreen() {
                     ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_8px_rgba(168,85,247,0.3)]' 
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.3)]'
                 }`}>
-                  {geminiApiKeyInput.trim() ? 'Gemini 1.5 Flash Ready' : 'WristOS Core Active'}
+                  {geminiApiKeyInput.trim() ? 'Client Override Set' : 'Supabase Edge Active'}
                 </span>
               </div>
 

@@ -217,6 +217,7 @@ export const userSettingsRepository = {
       autoSync: settings.autoSync ?? existing?.autoSync ?? true,
       notifications: settings.notifications ?? existing?.notifications ?? true,
       wristVibrate: settings.wristVibrate ?? existing?.wristVibrate ?? true,
+      ttsEnabled: settings.ttsEnabled ?? existing?.ttsEnabled ?? false,
       geminiApiKey: settings.geminiApiKey ?? existing?.geminiApiKey ?? '',
       updatedAt: now,
       syncStatus: 'pending'

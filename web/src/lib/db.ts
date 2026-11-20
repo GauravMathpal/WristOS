@@ -60,6 +60,7 @@ export interface UserSettingsRecord {
   autoSync: boolean
   notifications: boolean
   wristVibrate: boolean
+  ttsEnabled?: boolean
   geminiApiKey?: string
   updatedAt: number
   syncStatus: 'synced' | 'pending' | 'failed'

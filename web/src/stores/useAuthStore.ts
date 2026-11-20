@@ -21,8 +21,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => {
     set({ user, isLoading: false })
     if (user) {
+      syncService.initRealtime()
       // Auto-trigger sync when user becomes available
       setTimeout(() => syncService.triggerSync(), 300)
+    } else {
+      syncService.tearDownRealtime()
     }
   },
 

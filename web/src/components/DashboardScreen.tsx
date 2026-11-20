@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useAppStore } from '../stores/useAppStore'
 import { db, TaskRecord } from '../lib/db'
 import { taskRepository } from '../lib/repository'
+import { syncService, DailyBriefingData } from '../lib/syncService'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Footprints, 
@@ -13,15 +15,23 @@ import {
   Keyboard, 
   Bell, 
   Plus,
-  TrendingUp
+  TrendingUp,
+  Sparkles,
+  RefreshCw,
+  Zap
 } from 'lucide-react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { BreathingOrb } from './BreathingOrb'
 
 export function DashboardScreen() {
   const { watch, connectWatch, sendWatchAlert, setActiveTab } = useAppStore()
   
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
+  const memories = useLiveQuery(() => db.memories.toArray(), []) || []
+  const focusSessions = useLiveQuery(() => db.focusSessions.toArray(), []) || []
+  
+  const [briefing, setBriefing] = useState<DailyBriefingData | null>(null)
+  const [isBriefingLoading, setIsBriefingLoading] = useState(false)
   
   const activeTasks = tasks.filter(t => !t.deletedAt)
   const completedTasks = activeTasks.filter(t => t.isCompleted)
@@ -37,6 +47,30 @@ export function DashboardScreen() {
 
   const handleTestAlert = () => {
     sendWatchAlert("Focus Alert • WristOS Haptic Pulse")
+  }
+
+  const handleGenerateBriefing = async () => {
+    setIsBriefingLoading(true)
+    const activeMemories = memories.filter(m => !m.deletedAt)
+    const totalFocusMins = focusSessions
+      .filter(f => !f.deletedAt)
+      .reduce((acc, f) => acc + (f.durationMinutes || 0), 0)
+
+    const result = await syncService.getDailyBriefing({
+      tasks: activeTasks.map(t => ({ title: t.title, dueTime: t.dueTime, priority: t.priority, isCompleted: t.isCompleted })),
+      memories: activeMemories.map(m => ({ tag: m.tag, fact: m.fact })),
+      activity: {
+        steps: watch.stepCount || 7842,
+        stepGoal: 10000,
+        heartRateAvg: watch.heartRate || 78
+      },
+      focusMinutes: totalFocusMins
+    })
+
+    if (result) {
+      setBriefing(result)
+    }
+    setIsBriefingLoading(false)
   }
 
   return (
@@ -135,6 +169,88 @@ export function DashboardScreen() {
             <ChevronRight className="w-4 h-4 text-purple-400" />
           </div>
         </div>
+      </motion.div>
+
+      {/* AI Daily Intelligence Briefing Card (Powered by Gemini 3.8 Flash Backend) */}
+      <motion.div
+        whileHover={{ y: -3, scale: 1.008 }}
+        transition={{ duration: 0.2 }}
+        className="p-5 sm:p-6 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#191033]/85 via-[#130b26]/80 to-[#0e071e]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25 space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500/30 to-pink-500/20 border border-purple-400/40 flex items-center justify-center text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.4)]">
+              <Sparkles className="w-4 h-4 text-pink-400" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                <span>AI Daily Intelligence Briefing</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  {briefing?.source === 'gemini-3.8-flash' ? 'Gemini 3.8 Flash' : 'Cloud Intelligence'}
+                </span>
+              </h3>
+            </div>
+          </div>
+
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={handleGenerateBriefing}
+            disabled={isBriefingLoading}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-pink-200 border border-purple-500/30 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+            title="Generate fresh personalized AI briefing"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-pink-400 ${isBriefingLoading ? 'animate-spin' : ''}`} />
+            <span>{isBriefingLoading ? 'Generating...' : briefing ? 'Refresh' : 'Get Briefing'}</span>
+          </motion.button>
+        </div>
+
+        {briefing ? (
+          <AnimatePresence mode="wait">
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-3 pt-1 text-xs"
+            >
+              <p className="text-sm font-semibold text-white leading-relaxed">
+                {briefing.greeting}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-3.5 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 space-y-1.5">
+                  <span className="text-[10px] uppercase font-mono font-bold text-pink-400 flex items-center gap-1">
+                    <Zap className="w-3 h-3" />
+                    <span>Top Focus Priorities</span>
+                  </span>
+                  <ul className="space-y-1 text-slate-200 text-xs">
+                    {briefing.priorities.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-pink-400 font-bold">•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 space-y-1.5">
+                  <span className="text-[10px] uppercase font-mono font-bold text-cyan-400 flex items-center gap-1">
+                    <Heart className="w-3 h-3 text-cyan-400" />
+                    <span>Health & Biometrics</span>
+                  </span>
+                  <p className="text-slate-200 text-xs leading-relaxed">
+                    {briefing.healthInsight}
+                  </p>
+                  <p className="text-purple-300/80 text-[11px] pt-1 border-t border-purple-500/15">
+                    💡 {briefing.focusRecommendation}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        ) : (
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-[#140e29]/50 border border-purple-500/15 text-xs text-purple-200/70">
+            <p>Tap "Get Briefing" to generate an instant synthesis of your pending tasks, health telemetry, and knowledge vault.</p>
+          </div>
+        )}
       </motion.div>
 
       {/* "Ask WristOS anything..." Vibrant Holographic Card (From Mockup Screen 1) */}

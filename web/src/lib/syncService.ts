@@ -3,10 +3,12 @@ import {
   TaskRecord, 
   MemoryRecord, 
   FocusSessionRecord, 
-  ActivityRecord
+  ActivityRecord,
+  UserSettingsRecord
 } from './db'
 import { supabase, isSupabaseConfigured } from './supabase'
 import { useAuthStore } from '../stores/useAuthStore'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 export type SyncState = 'idle' | 'syncing' | 'synced' | 'offline' | 'error'
 
@@ -16,18 +18,40 @@ export interface SyncStats {
   pendingCount: number
 }
 
+export interface UserSummaryData {
+  totalTasks: number
+  completedTasks: number
+  pendingTasks: number
+  totalMemories: number
+  focusMinutes: number
+  steps: number
+  heartRateAvg: number
+}
+
+export interface DailyBriefingData {
+  greeting: string
+  priorities: string[]
+  healthInsight: string
+  focusRecommendation: string
+  source: string
+}
+
 class SyncService {
   private syncState: SyncState = 'idle'
   private subscribers = new Set<(state: SyncState, lastSync?: number) => void>()
   private lastSyncTime: number = 0
   private isRunning = false
+  private realtimeChannel: RealtimeChannel | null = null
 
   constructor() {
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => this.triggerSync())
+      window.addEventListener('online', () => {
+        this.initRealtime()
+        this.triggerSync()
+      })
       window.addEventListener('offline', () => this.updateState('offline'))
 
-      // Periodic sync every 60s
+      // Periodic safety sync every 60s
       window.setInterval(() => {
         if (navigator.onLine && useAuthStore.getState().user) {
           this.triggerSync()
@@ -58,6 +82,171 @@ class SyncService {
     return pTasks + pMems + pFocus + pAct + pSet
   }
 
+  // ----------------------------------------------------
+  // REALTIME CHANGE DATA CAPTURE (CDC) ENGINE
+  // ----------------------------------------------------
+  public initRealtime() {
+    if (!isSupabaseConfigured || this.realtimeChannel) return
+    const user = useAuthStore.getState().user
+    if (!user) return
+
+    this.realtimeChannel = supabase.channel(`wristos_realtime_${user.id}`)
+      // 1. Tasks CDC
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tasks', 
+        filter: `user_id=eq.${user.id}` 
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const rt = payload.new as any
+          const local = await db.tasks.get(rt.id)
+          if (!local || local.updatedAt <= rt.updated_at) {
+            await db.tasks.put({
+              id: rt.id,
+              title: rt.title,
+              description: rt.description,
+              dueTime: rt.due_time,
+              isCompleted: rt.is_completed,
+              priority: rt.priority,
+              category: rt.category,
+              createdAt: rt.created_at,
+              updatedAt: rt.updated_at,
+              deletedAt: rt.deleted_at,
+              syncStatus: 'synced'
+            })
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const old = payload.old as any
+          if (old?.id) await db.tasks.delete(old.id)
+        }
+      })
+      // 2. Memories CDC
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'memories', 
+        filter: `user_id=eq.${user.id}` 
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const rm = payload.new as any
+          const local = await db.memories.get(rm.id)
+          if (!local || local.updatedAt <= rm.updated_at) {
+            await db.memories.put({
+              id: rm.id,
+              tag: rm.tag,
+              fact: rm.fact,
+              createdAt: rm.created_at,
+              updatedAt: rm.updated_at,
+              deletedAt: rm.deleted_at,
+              syncStatus: 'synced'
+            })
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const old = payload.old as any
+          if (old?.id) await db.memories.delete(old.id)
+        }
+      })
+      // 3. Focus Sessions CDC
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'focus_sessions', 
+        filter: `user_id=eq.${user.id}` 
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const rf = payload.new as any
+          const local = await db.focusSessions.get(rf.id)
+          if (!local || local.updatedAt <= rf.updated_at) {
+            await db.focusSessions.put({
+              id: rf.id,
+              title: rf.title,
+              durationMinutes: rf.duration_minutes,
+              mode: rf.mode,
+              completedAt: rf.completed_at,
+              createdAt: rf.created_at,
+              updatedAt: rf.updated_at,
+              deletedAt: rf.deleted_at,
+              syncStatus: 'synced'
+            })
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const old = payload.old as any
+          if (old?.id) await db.focusSessions.delete(old.id)
+        }
+      })
+      // 4. Activity Logs CDC
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'activity_logs', 
+        filter: `user_id=eq.${user.id}` 
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const ra = payload.new as any
+          const local = await db.activityLogs.get(ra.id)
+          if (!local || local.updatedAt <= ra.updated_at) {
+            await db.activityLogs.put({
+              id: ra.id,
+              date: ra.date,
+              steps: ra.steps,
+              stepGoal: ra.step_goal,
+              heartRateAvg: ra.heart_rate_avg,
+              calories: ra.calories,
+              distanceKm: Number(ra.distance_km),
+              activeMinutes: ra.active_minutes,
+              createdAt: ra.created_at,
+              updatedAt: ra.updated_at,
+              deletedAt: ra.deleted_at,
+              syncStatus: 'synced'
+            })
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const old = payload.old as any
+          if (old?.id) await db.activityLogs.delete(old.id)
+        }
+      })
+      // 5. User Settings CDC
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'user_settings', 
+        filter: `user_id=eq.${user.id}` 
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const rs = payload.new as any
+          await db.userSettings.put({
+            userId: rs.user_id,
+            preset: rs.preset,
+            mode: rs.mode,
+            customPrimary: rs.custom_primary,
+            customSecondary: rs.custom_secondary,
+            autoSync: rs.auto_sync,
+            notifications: rs.notifications,
+            wristVibrate: rs.wrist_vibrate,
+            ttsEnabled: rs.tts_enabled,
+            updatedAt: rs.updated_at,
+            syncStatus: 'synced'
+          })
+          if (typeof rs.tts_enabled === 'boolean') {
+            localStorage.setItem('wristos_tts_enabled', String(rs.tts_enabled))
+          }
+        }
+      })
+
+    this.realtimeChannel.subscribe()
+  }
+
+  public tearDownRealtime() {
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel)
+      this.realtimeChannel = null
+    }
+  }
+
+  // ----------------------------------------------------
+  // FULL BI-DIRECTIONAL SYNC (PUSH + PULL)
+  // ----------------------------------------------------
   public async triggerSync(): Promise<void> {
     if (!isSupabaseConfigured) {
       this.updateState('idle')
@@ -185,6 +374,7 @@ class SyncService {
           auto_sync: s.autoSync,
           notifications: s.notifications,
           wrist_vibrate: s.wristVibrate,
+          tts_enabled: s.ttsEnabled ?? false,
           updated_at: s.updatedAt
         }
         const { error } = await supabase.from('user_settings').upsert(payload)
@@ -332,6 +522,39 @@ class SyncService {
         await db.syncMeta.put({ key: 'last_activity_pull', value: Date.now() })
       }
 
+      // ----------------------------------------------------
+      // 10. PULL: User Settings
+      // ----------------------------------------------------
+      const { data: remoteSettings, error: setPullError } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!setPullError && remoteSettings) {
+        const local = await db.userSettings.get(user.id)
+        if (!local || local.updatedAt <= remoteSettings.updated_at) {
+          const localSettings: UserSettingsRecord = {
+            userId: remoteSettings.user_id,
+            preset: remoteSettings.preset,
+            mode: remoteSettings.mode,
+            customPrimary: remoteSettings.custom_primary,
+            customSecondary: remoteSettings.custom_secondary,
+            autoSync: remoteSettings.auto_sync,
+            notifications: remoteSettings.notifications,
+            wristVibrate: remoteSettings.wrist_vibrate,
+            ttsEnabled: remoteSettings.tts_enabled,
+            updatedAt: remoteSettings.updated_at,
+            syncStatus: 'synced'
+          }
+          await db.userSettings.put(localSettings)
+
+          if (typeof remoteSettings.tts_enabled === 'boolean') {
+            localStorage.setItem('wristos_tts_enabled', String(remoteSettings.tts_enabled))
+          }
+        }
+      }
+
       this.lastSyncTime = Date.now()
       this.updateState('synced')
     } catch (e) {
@@ -339,6 +562,47 @@ class SyncService {
       this.updateState('error')
     } finally {
       this.isRunning = false
+    }
+  }
+
+  // ----------------------------------------------------
+  // BACKEND RPC & INTELLIGENCE HELPERS
+  // ----------------------------------------------------
+  public async getUserSummary(targetDate?: string): Promise<UserSummaryData | null> {
+    if (!isSupabaseConfigured) return null
+    try {
+      const { data, error } = await supabase.rpc('get_user_summary', { 
+        target_date: targetDate || new Date().toISOString().split('T')[0] 
+      })
+      if (error) {
+        console.warn('RPC summary notice:', error.message)
+        return null
+      }
+      return data as UserSummaryData
+    } catch {
+      return null
+    }
+  }
+
+  public async getDailyBriefing(params: {
+    tasks?: any[]
+    memories?: any[]
+    activity?: any
+    focusMinutes?: number
+    apiKey?: string
+  }): Promise<DailyBriefingData | null> {
+    if (!isSupabaseConfigured) return null
+    try {
+      const { data, error } = await supabase.functions.invoke('gemini-briefing', {
+        body: params
+      })
+      if (error) {
+        console.warn('Daily briefing edge function error:', error.message)
+        return null
+      }
+      return data as DailyBriefingData
+    } catch {
+      return null
     }
   }
 }
