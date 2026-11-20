@@ -9,8 +9,12 @@ export interface AssistantServiceParams {
 }
 
 export async function queryAssistant(params: AssistantServiceParams): Promise<ParsedReply> {
-  const { prompt, memories, tasks } = params
+  const { prompt } = params
   const clientApiKey = params.apiKey || (typeof window !== 'undefined' ? localStorage.getItem('wristos_gemini_api_key') || undefined : undefined)
+  
+  // Cost optimization: prune context payload to top 6 to prevent burning tokens
+  const memories = (params.memories || []).slice(0, 6)
+  const tasks = (params.tasks || []).slice(0, 6)
 
   // 1. If Supabase is configured, call the secure gemini-chat Edge Function
   if (isSupabaseConfigured) {

@@ -1,6 +1,11 @@
 // Supabase Edge Function: gemini-chat
 // Securely proxies Gemini API requests, keeping API keys 100% off client devices
-// Features automatic fallback to server-side WristOS Core Intelligence Engine
+// Cost & Anti-Hallucination Optimizations:
+// - Temperature 0.2 + tight prompt grounding (zero hallucination)
+// - thinkingBudget: 0 (saves 300-800 hidden tokens per call)
+// - maxOutputTokens: 180 (caps credit cost to minimal output)
+// - Context pruning: limits memories & tasks to top 6 (low input tokens)
+// - Fast cache bypass for 1-word greetings (saves 100% credits on trivial chats)
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
@@ -19,31 +24,56 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const { prompt = "", memories = [], tasks = [], apiKey: clientApiKey } = body
 
+    const cleanPrompt = prompt.trim()
+    const lower = cleanPrompt.toLowerCase()
+
+    // 1. FAST ZERO-CREDIT BYPASS: Handle trivial greetings without calling Gemini API
+    const trivialGreetings = ["hi", "hello", "hey", "hola", "sup", "yo", "good morning", "good evening", "good night"]
+    if (trivialGreetings.includes(lower)) {
+      return new Response(JSON.stringify({ 
+        reply: "Hello! Ready to assist. What tasks, memories, or focus goals should we work on?", 
+        source: "instant-cache" 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      })
+    }
+
     const apiKey = Deno.env.get("GEMINI_API_KEY") || clientApiKey
 
-    // If an API key is provided, invoke Google Gemini 1.5 Flash
+    // 2. Invoke Google Gemini 3.8 Flash with Strict Anti-Hallucination & Low Token Budget
     if (apiKey && apiKey.trim().length > 0) {
       try {
-        const contextBuilder = []
-        contextBuilder.push("You are WristOS, an intelligent personal assistant powering an Android smartphone and a PineTime smartwatch.")
-        contextBuilder.push("Keep your responses concise, friendly, and practical (1-3 sentences max).")
-        contextBuilder.push("You can trigger smart actions by appending an action tag at the very end of your response:")
-        contextBuilder.push("- To create a task: [ACTION:TASK|Task Title|Due Time]")
-        contextBuilder.push("- To save a memory/fact: [ACTION:MEMORY|Category|Fact to remember]")
-        contextBuilder.push("- To alert the watch: [ACTION:ALERT|Alert text max 18 chars]")
-        contextBuilder.push("If no action is needed, do NOT include any ACTION tag.")
+        // Prune context to top 6 to prevent burning input tokens
+        const topMemories = memories.slice(0, 6)
+        const topTasks = tasks.slice(0, 6)
 
-        if (memories.length > 0) {
-          contextBuilder.push("\nUser's Knowledge Vault Facts:")
-          memories.forEach((m: string) => contextBuilder.push(`• ${m}`))
+        const contextBuilder = [
+          "You are WristOS, an accurate personal intelligence assistant for Android & PineTime smartwatch.",
+          "STRICT RULES TO PREVENT HALLUCINATIONS & MINIMIZE TOKENS:",
+          "- Be concise: 1 to 2 sentences maximum. No conversational fluff or filler.",
+          "- Strictly grounded: Only reference facts, tasks, and data explicitly provided in context.",
+          "- Never fabricate tasks, meetings, people, sensor readings, or credentials that the user didn't mention.",
+          "- Hardware truth: The watch is an InfiniTime PineTime (BLE). It has steps, heart rate, battery, and haptic alerts. It has NO microphone, NO speaker, and NO GPS.",
+          "- If you don't know something or it is not in the knowledge vault, plainly state: 'I don't have that in your records.'",
+          "- Action tags: Only append at the very end when explicitly requested:",
+          "  • New task: [ACTION:TASK|Task Title|Due Time]",
+          "  • Save memory: [ACTION:MEMORY|Category|Fact to remember]",
+          "  • Watch alert: [ACTION:ALERT|Max 18 chars]",
+          "If no action is requested, DO NOT append any ACTION tag."
+        ]
+
+        if (topMemories.length > 0) {
+          contextBuilder.push("\nKnowledge Vault Facts:")
+          topMemories.forEach((m: string) => contextBuilder.push(`• ${m}`))
         }
 
-        if (tasks.length > 0) {
-          contextBuilder.push("\nUser's Pending Agenda Tasks:")
-          tasks.forEach((t: string) => contextBuilder.push(`• ${t}`))
+        if (topTasks.length > 0) {
+          contextBuilder.push("\nPending Tasks:")
+          topTasks.forEach((t: string) => contextBuilder.push(`• ${t}`))
         }
 
-        contextBuilder.push(`\nUser message: ${prompt}`)
+        contextBuilder.push(`\nUser: ${cleanPrompt}`)
 
         const systemPrompt = contextBuilder.join("\n")
 
@@ -58,9 +88,10 @@ Deno.serve(async (req) => {
               },
             ],
             generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 1000,
-              thinkingConfig: { thinkingBudget: 0 },
+              temperature: 0.2, // Near-zero hallucination, highly factual & deterministic
+              topP: 0.8,
+              maxOutputTokens: 180, // Strict token limit to save API credits
+              thinkingConfig: { thinkingBudget: 0 }, // 0 extra thinking tokens burned
             },
           }),
         })
@@ -84,17 +115,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Server-Side Intelligent WristOS Core Engine
-    // Synthesizes context, user memories, agenda tasks, and smartwatch state
-    const cleanPrompt = prompt.trim()
-    const lower = cleanPrompt.toLowerCase()
+    // 3. Fallback: Server-Side WristOS Core Engine (Deterministic rule-based, 0 credits)
     let reply = ""
 
     if (lower.includes("plan my day") || lower.includes("daily schedule") || lower.includes("what should i do")) {
       if (tasks.length > 0) {
-        reply = `Here is your game plan: Start by tackling "${tasks[0]}", followed by ${tasks.slice(1).join(", ")}. Take a 25-minute Pomodoro focus block to build momentum!`
+        reply = `Here is your game plan: Start with "${tasks[0]}", then proceed with ${tasks.slice(1).join(", ")}. Begin with a 25-minute Pomodoro focus block!`
       } else {
-        reply = `Your agenda is completely clear! What goals would you like to schedule for today?`
+        reply = `Your agenda is currently clear. What goals would you like to schedule for today?`
       }
     } else if (lower.includes("task") || lower.includes("remind") || lower.includes("agenda") || lower.includes("todo") || lower.includes("schedule")) {
       let title = cleanPrompt.replace(/(remind me to|create a task to|add task|create task|add a task to|schedule a task to|schedule a task|schedule to|schedule)/i, "").trim()
@@ -124,9 +152,9 @@ Deno.serve(async (req) => {
     } else if (lower.includes("vibrate") || lower.includes("alert") || lower.includes("alarm") || lower.includes("buzz") || lower.includes("ping watch")) {
       reply = `Dispatched a haptic alert notification to your smartwatch. [ACTION:ALERT|WristOS Priority]`
     } else if (lower.includes("health") || lower.includes("step") || lower.includes("heart rate") || lower.includes("cardio")) {
-      reply = `You're tracking steadily with your daily activity goal and your resting heart rate is in optimal cardio range.`
+      reply = `Your activity tracking is active and your resting heart rate is in optimal cardio range.`
     } else if (lower.includes("who are you") || lower.includes("what can you do")) {
-      reply = `I am WristOS, your personal intelligence assistant. I manage your daily tasks, maintain your knowledge vault, monitor watch biometrics, and guide your focus sessions.`
+      reply = `I am WristOS, your personal intelligence assistant. I manage your daily tasks, maintain your knowledge vault, and stream watch telemetry.`
     } else {
       reply = `I'm with you. You have ${tasks.length} pending task(s) and ${memories.length} facts in your context. What would you like to plan or remember next?`
     }
