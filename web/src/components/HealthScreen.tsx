@@ -4,22 +4,21 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Heart, 
   ChevronDown, 
+  TrendingUp, 
+  ChevronLeft, 
+  MoreHorizontal,
   ShieldCheck,
-  Watch,
-  TrendingUp,
-  Activity
+  Watch
 } from 'lucide-react'
 import { ActivityRing } from './ActivityRing'
-import { FocusTimer } from './FocusTimer'
 import { useAppStore } from '../stores/useAppStore'
 import { activityRepository } from '../lib/repository'
 
 export function HealthScreen() {
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'activity' | 'heart' | 'focus'>('overview')
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'activity' | 'heart'>('overview')
   const [hoveredDay, setHoveredDay] = useState<{ day: string; steps: string; percent: number } | null>(null)
-  const { watch, sendWatchAlert } = useAppStore()
+  const { watch, setActiveTab, sendWatchAlert } = useAppStore()
 
-  const isConnected = watch.connectionState === 'connected'
   const displaySteps = watch.stepCount > 0 ? watch.stepCount : 7842
   const displayHeartRate = watch.heartRate > 0 ? watch.heartRate : 78
 
@@ -62,55 +61,58 @@ export function HealthScreen() {
       ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 max-w-md mx-auto pb-6">
       
-      {/* Header & Sub-Navigation Pills (From Mockup Screen 3) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#1c123b]/85 via-[#140e2b]/80 to-[#0e0820]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-bold flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-pink-400" />
-              <span>HEALTH & BIOMETRICS</span>
-            </span>
-            {isConnected && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(52,211,153,0.3)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>HRS 0x180D Live</span>
-              </span>
-            )}
-          </div>
-          <h2 className="text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-            Health Intelligence
-          </h2>
-          <p className="text-xs text-purple-200/80 font-medium">
-            Biometric telemetry streaming continuously from your PineTime smartwatch
-          </p>
-        </div>
+      {/* Top Header matching Mockup Screen 3 */}
+      <div className="flex items-center justify-between pt-1">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setActiveTab('dashboard')}
+          className="w-10 h-10 rounded-full bg-[#161224] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md"
+          title="Back to Home"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </motion.button>
 
-        {/* Sub-tab pills with sliding motion indicator */}
-        <div className="flex items-center p-1.5 rounded-2xl bg-[#0d091d]/80 border border-purple-500/25 shadow-inner overflow-x-auto">
-          {(['overview', 'activity', 'heart', 'focus'] as const).map((tab) => {
-            const isSelected = activeSubTab === tab
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveSubTab(tab)}
-                className={`relative px-4 py-1.5 rounded-xl text-xs font-bold capitalize transition-colors shrink-0 ${
-                  isSelected ? 'text-white' : 'text-slate-400 hover:text-purple-200'
-                }`}
-              >
-                {isSelected && (
-                  <motion.div
-                    layoutId="healthSubTabPill"
-                    transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 shadow-md shadow-pink-600/30"
-                  />
-                )}
-                <span className="relative z-10">{tab}</span>
-              </button>
-            )
-          })}
-        </div>
+        <h2 className="text-lg font-extrabold text-white tracking-tight">
+          Health
+        </h2>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setActiveTab('settings')}
+          className="w-10 h-10 rounded-full bg-[#161224] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md"
+          title="Health Settings"
+        >
+          <MoreHorizontal className="w-5 h-5" />
+        </motion.button>
+      </div>
+
+      {/* Segmented Control Bar: Overview | Activity | Heart Rate */}
+      <div className="flex items-center p-1 rounded-2xl bg-[#161224] border border-white/[0.08] shadow-inner">
+        {(['overview', 'activity', 'heart'] as const).map((tab) => {
+          const isSelected = activeSubTab === tab
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveSubTab(tab)}
+              className={`flex-1 relative py-2 rounded-xl text-xs font-bold capitalize transition-colors ${
+                isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {isSelected && (
+                <motion.div
+                  layoutId="healthSubTabPill"
+                  transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 shadow-md shadow-pink-600/30"
+                />
+              )}
+              <span className="relative z-10">{tab === 'heart' ? 'Heart Rate' : tab}</span>
+            </button>
+          )
+        })}
       </div>
 
       <AnimatePresence mode="wait">
@@ -335,25 +337,6 @@ export function HealthScreen() {
                 <span>Test Wrist Telemetry Alert</span>
               </motion.button>
             </div>
-          </motion.div>
-        )}
-
-        {/* FOCUS TIMER VIEW */}
-        {activeSubTab === 'focus' && (
-          <motion.div
-            key="focus"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="p-8 sm:p-12 rounded-3xl border border-purple-500/30 bg-gradient-to-b from-[#221345]/90 via-[#150d2c]/85 to-[#0b071a]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40 flex flex-col items-center justify-center space-y-5"
-          >
-            <div className="space-y-1 text-center mb-2">
-              <h3 className="text-xl font-extrabold text-white tracking-tight">Focus & Productivity Session</h3>
-              <p className="text-xs text-purple-200/80 font-medium">Deep work countdown with automated wrist haptic alerts</p>
-            </div>
-            
-            <FocusTimer defaultDurationMinutes={25} size={250} />
           </motion.div>
         )}
       </AnimatePresence>

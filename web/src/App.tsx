@@ -18,7 +18,9 @@ import {
   PanelLeftClose, 
   PanelLeft, 
   Wifi, 
-  WifiOff
+  WifiOff,
+  Heart,
+  MoreHorizontal
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { DashboardScreen } from './components/DashboardScreen'
@@ -53,14 +55,13 @@ export function App() {
     { id: 'settings' as const, label: 'Settings', icon: Sliders, badge: null },
   ]
 
-  // Mobile bottom navigation items (5 primary tabs)
+  // Mobile bottom navigation items (5 primary tabs matching mockup)
   const mobileNavItems = [
     { id: 'dashboard' as const, label: 'Home', icon: Home },
     { id: 'assistant' as const, label: 'AI', icon: Sparkles },
     { id: 'tasks' as const, label: 'Tasks', icon: CheckSquare },
-    { id: 'focus' as const, label: 'Focus', icon: Timer },
-    { id: 'health' as const, label: 'Health', icon: Activity },
-    { id: 'settings' as const, label: 'More', icon: Sliders },
+    { id: 'health' as const, label: 'Health', icon: Heart },
+    { id: 'settings' as const, label: 'More', icon: MoreHorizontal },
   ]
 
   const isConnected = watch.connectionState === 'connected'

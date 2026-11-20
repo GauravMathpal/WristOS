@@ -98,13 +98,16 @@ export function ActivityRing({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4 }}
-            className="text-4xl font-extrabold tracking-tight text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+            className="text-4xl font-black tracking-tight text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
           >
             {steps.toLocaleString()}
           </motion.div>
 
-          <span className="text-xs font-bold text-pink-300/90 uppercase tracking-widest text-[11px] mt-0.5">
-            steps ({Math.round(progress * 100)}%)
+          <span className="text-xs font-bold text-slate-200 mt-0.5">
+            Steps
+          </span>
+          <span className="text-[11px] text-slate-400 font-medium">
+            of {goal.toLocaleString()}
           </span>
         </div>
       </div>

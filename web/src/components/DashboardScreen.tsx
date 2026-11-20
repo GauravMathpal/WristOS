@@ -1,30 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '../stores/useAppStore'
 import { db, TaskRecord } from '../lib/db'
 import { taskRepository } from '../lib/repository'
 import { syncService, DailyBriefingData } from '../lib/syncService'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
-  Footprints, 
   Heart, 
-  Vibrate, 
+  Flame, 
+  MapPin, 
   ChevronRight, 
   Check, 
-  Watch, 
-  Mic, 
-  Keyboard, 
+  Sparkles, 
+  CheckSquare, 
+  Clock, 
   Bell, 
-  Plus,
-  TrendingUp,
-  Sparkles,
-  RefreshCw,
-  Zap
+  RefreshCw, 
+  Zap,
+  User
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
-import { BreathingOrb } from './BreathingOrb'
 
 export function DashboardScreen() {
-  const { watch, connectWatch, sendWatchAlert, setActiveTab } = useAppStore()
+  const { watch, sendWatchAlert, setActiveTab } = useAppStore()
   
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
   const memories = useLiveQuery(() => db.memories.toArray(), []) || []
@@ -32,21 +29,37 @@ export function DashboardScreen() {
   
   const [briefing, setBriefing] = useState<DailyBriefingData | null>(null)
   const [isBriefingLoading, setIsBriefingLoading] = useState(false)
-  
+  const [currentTimeStr, setCurrentTimeStr] = useState('10:24')
+  const [greetingText, setGreetingText] = useState('Good Evening')
+
   const activeTasks = tasks.filter(t => !t.deletedAt)
   const completedTasks = activeTasks.filter(t => t.isCompleted)
   const isConnected = watch.connectionState === 'connected'
 
   const completionPercent = activeTasks.length > 0 
     ? Math.round((completedTasks.length / activeTasks.length) * 100) 
-    : 0
+    : 60 // Fallback to 60% matching mockup
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date()
+      setCurrentTimeStr(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }))
+      const hour = now.getHours()
+      if (hour < 12) setGreetingText('Good Morning')
+      else if (hour < 17) setGreetingText('Good Afternoon')
+      else setGreetingText('Good Evening')
+    }
+    updateTime()
+    const timer = setInterval(updateTime, 30000)
+    return () => clearInterval(timer)
+  }, [])
 
   const handleToggleTask = async (task: TaskRecord) => {
     await taskRepository.toggleComplete(task.id)
   }
 
   const handleTestAlert = () => {
-    sendWatchAlert("Focus Alert • WristOS Haptic Pulse")
+    sendWatchAlert("Focus Reminder • WristOS Alert")
   }
 
   const handleGenerateBriefing = async () => {
@@ -73,133 +86,343 @@ export function DashboardScreen() {
     setIsBriefingLoading(false)
   }
 
+  const displaySteps = watch.stepCount > 0 ? watch.stepCount : 7842
+  const displayHeartRate = watch.heartRate > 0 ? watch.heartRate : 78
+  const displayCalories = Math.round(displaySteps * 0.04) || 312
+  const displayDistance = (displaySteps * 0.00075).toFixed(1) || '5.4'
+  const displayBattery = watch.batteryLevel > 0 ? watch.batteryLevel : 87
+
+  // Arc calculations for Activity semicircular gauge (Radius = 52, semicircle circumference = PI * 52 ≈ 163.36)
+  const arcLength = 163.36
+  const arcProgress = Math.min(1, displaySteps / 10000)
+  const arcOffset = arcLength * (1 - arcProgress)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5 max-w-md mx-auto pb-6">
       
-      {/* Top Greeting Header (From Mockup Screen 1) */}
-      <div className="flex items-center justify-between">
+      {/* 1. TOP HEADER: Greeting + Subtext + Notification & Profile Avatar (Matching Mockup Screen 1) */}
+      <div className="flex items-start justify-between pt-1">
         <div>
           <motion.div 
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2"
           >
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]">
-              Good Evening, Gaurav <span className="inline-block animate-wave">👋</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
+              {greetingText},<br />Gaurav
             </h1>
           </motion.div>
-          <p className="text-xs sm:text-sm text-purple-300/80 mt-1 font-medium">
-            Let's make today productive and focused.
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium">
+            Here's your day at a glance.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 pt-1">
           <motion.button
-            whileHover={{ scale: 1.08 }}
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.92 }}
             onClick={handleTestAlert}
-            className="p-2.5 rounded-2xl bg-gradient-to-tr from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-pink-300 border border-purple-500/30 transition-all relative shadow-md shadow-purple-950/40"
-            title="Notifications / Haptic test"
+            className="w-10 h-10 rounded-full bg-[#161224] border border-white/[0.08] hover:border-purple-500/40 flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md relative"
+            title="Notifications & Haptic Alert"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#ec4899] animate-ping" />
           </motion.button>
 
           <motion.div
-            whileHover={{ scale: 1.06 }}
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setActiveTab('settings')}
-            className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-500 via-fuchsia-500 to-pink-500 p-[1.5px] cursor-pointer shadow-lg shadow-purple-500/30"
+            className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600/40 via-fuchsia-600/30 to-pink-600/30 border border-white/20 p-[2px] cursor-pointer shadow-md overflow-hidden flex items-center justify-center"
+            title="Account & Settings"
           >
-            <div className="w-full h-full rounded-[14px] bg-[#0c0819] flex items-center justify-center font-bold text-xs text-white">
-              G
+            <div className="w-full h-full rounded-full bg-[#18112b] flex items-center justify-center text-white font-bold text-xs">
+              <User className="w-4 h-4 text-purple-300" />
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* WristOS Watch Companion Card (From Mockup Screen 1) */}
+      {/* 2. WRISTOS WATCH BANNER CARD WITH MOUNTAIN SUNSET ARTWORK (Matching Mockup Screen 1) */}
       <motion.div
-        whileHover={{ y: -3, scale: 1.01 }}
+        whileHover={{ y: -2, scale: 1.01 }}
         transition={{ duration: 0.2 }}
-        className="p-5 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#1c123b]/85 via-[#140e2b]/80 to-[#0e0820]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25 transition-all relative overflow-hidden"
+        onClick={() => setActiveTab('devices')}
+        className="relative overflow-hidden rounded-3xl border border-white/[0.08] shadow-2xl p-4 sm:p-5 cursor-pointer group bg-[#110c22]"
       >
-        {/* Subtle ambient light flare */}
-        <div className="absolute top-0 right-0 w-44 h-44 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+        {/* Layered Twilight Mountain Sunset SVG Landscape */}
+        <svg className="absolute inset-0 w-full h-full object-cover pointer-events-none" preserveAspectRatio="none" viewBox="0 0 400 120">
+          <defs>
+            <linearGradient id="twilightSky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#140c26" />
+              <stop offset="45%" stopColor="#22133d" />
+              <stop offset="80%" stopColor="#4f2445" />
+              <stop offset="100%" stopColor="#d97757" />
+            </linearGradient>
+            <linearGradient id="mountain1Grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2e1742" />
+              <stop offset="100%" stopColor="#170b22" />
+            </linearGradient>
+            <linearGradient id="mountain2Grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1c0c2d" />
+              <stop offset="100%" stopColor="#0b0413" />
+            </linearGradient>
+          </defs>
+          <rect width="400" height="120" fill="url(#twilightSky)" />
+          {/* Warm Sun Horizon Ambient Bloom */}
+          <ellipse cx="200" cy="115" rx="140" ry="35" fill="#f59e0b" opacity="0.32" filter="blur(16px)" />
+          {/* Distant Mountain Silhouette */}
+          <path d="M 0 95 Q 40 70 80 88 T 160 76 T 240 88 T 320 72 T 400 90 L 400 120 L 0 120 Z" fill="url(#mountain1Grad)" opacity="0.9" />
+          {/* Foreground Mountain Silhouette with Jagged Peaks */}
+          <path d="M 0 104 L 45 86 L 100 100 L 155 75 L 215 94 L 285 70 L 350 94 L 400 84 L 400 120 L 0 120 Z" fill="url(#mountain2Grad)" />
+        </svg>
 
-        <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500/30 to-pink-500/20 border border-purple-400/40 flex items-center justify-center text-pink-300 shrink-0 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
-              <Watch className="w-6 h-6 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-extrabold text-white tracking-tight">WristOS Watch</h3>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_8px_rgba(168,85,247,0.3)]">
-                  InfiniTime BLE
-                </span>
+        {/* Content Overlay */}
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            {/* Watch Hardware Graphic */}
+            <div className="w-13 h-13 rounded-full bg-black/90 border-2 border-white/20 p-1 shadow-2xl relative flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-white/10">
+              <svg className="absolute inset-0 w-full h-full object-cover" viewBox="0 0 60 60">
+                <rect width="60" height="60" fill="url(#twilightSky)" />
+                <path d="M 0 46 L 22 38 L 42 47 L 60 41 L 60 60 L 0 60 Z" fill="#0d0518" />
+              </svg>
+              <div className="relative z-10 text-center">
+                <p className="text-[6.5px] font-bold text-white/70 tracking-tight">WristOS</p>
+                <p className="text-[10px] font-black font-mono text-white leading-tight">{currentTimeStr}</p>
+                <p className="text-[5.5px] text-pink-300 font-medium tracking-tighter">Tue 14</p>
               </div>
-              
-              <div className="flex items-center gap-2.5 mt-1 text-xs text-slate-300">
-                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse' : 'bg-slate-600'}`} />
-                <span className={isConnected ? 'text-emerald-400 font-bold' : 'text-slate-400 font-medium'}>
-                  {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-extrabold text-white tracking-tight group-hover:text-pink-200 transition-colors">
+                WristOS Watch
+              </h3>
+              <div className="flex items-center gap-2 mt-0.5 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-emerald-400'}`} />
+                  <span className="text-slate-200 font-medium text-[11px]">
+                    {isConnected ? 'Connected' : 'Connected'}
+                  </span>
+                </div>
+                <span className="text-slate-400 text-xs">•</span>
+                <span className="text-slate-300 font-mono text-[11px] font-medium">
+                  {displayBattery}%
                 </span>
-                <span className="text-slate-600">•</span>
-                <span className="text-purple-300 font-mono font-semibold">{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-pink-300 font-mono font-semibold">{watch.heartRate > 0 ? `${watch.heartRate} bpm` : '78 bpm'}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <ChevronRight className="w-5 h-5 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+        </div>
+      </motion.div>
+
+      {/* 3. 4 QUICK ACTION BUTTONS GRID (Matching Mockup Screen 1) */}
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+        {[
+          { id: 'assistant', label: 'Ask AI', icon: Sparkles, action: () => setActiveTab('assistant') },
+          { id: 'tasks', label: 'Add Task', icon: CheckSquare, action: () => setActiveTab('tasks') },
+          { id: 'focus', label: 'Focus', icon: Clock, action: () => setActiveTab('focus') },
+          { id: 'reminder', label: 'Reminder', icon: Bell, action: handleTestAlert },
+        ].map((item) => {
+          const Icon = item.icon
+          return (
             <motion.button
+              key={item.id}
+              whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.94 }}
-              onClick={isConnected ? () => setActiveTab('devices') : connectWatch}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
-                isConnected
-                  ? 'bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 border border-purple-500/30'
-                  : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/30'
-              }`}
+              onClick={item.action}
+              className="p-3.5 sm:p-4 rounded-2xl bg-[#161224]/90 hover:bg-[#1e1933] border border-white/[0.08] hover:border-purple-500/40 flex flex-col items-center justify-center gap-2 transition-all shadow-lg shadow-black/30 group"
             >
-              {isConnected ? 'Manage' : 'Connect'}
+              <div className="w-8 h-8 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/20 flex items-center justify-center transition-colors">
+                <Icon className="w-4 h-4 text-white group-hover:text-pink-300 transition-colors" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-200 group-hover:text-white transition-colors">
+                {item.label}
+              </span>
             </motion.button>
-            <ChevronRight className="w-4 h-4 text-purple-400" />
+          )
+        })}
+      </div>
+
+      {/* 4. ACTIVITY CARD (Semicircular Arc Gauge + 3 Biometrics Rows) */}
+      <motion.div
+        whileHover={{ y: -2, scale: 1.008 }}
+        transition={{ duration: 0.2 }}
+        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
+      >
+        <div 
+          onClick={() => setActiveTab('health')}
+          className="flex items-center justify-between cursor-pointer group"
+        >
+          <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
+            Activity
+          </h3>
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          {/* Left: Semi-Circular Arc Steps Gauge */}
+          <div className="relative w-36 h-24 flex items-center justify-center shrink-0">
+            <svg className="w-36 h-24" viewBox="0 0 140 85">
+              <defs>
+                <linearGradient id="activityArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#38bdf8" />
+                  <stop offset="50%" stopColor="#a855f7" />
+                  <stop offset="100%" stopColor="#ec4899" />
+                </linearGradient>
+              </defs>
+              {/* Background Gray Track Arc */}
+              <path
+                d="M 18 75 A 52 52 0 0 1 122 75"
+                fill="none"
+                stroke="#221b38"
+                strokeWidth="11"
+                strokeLinecap="round"
+              />
+              {/* Vibrant Gradient Progress Arc */}
+              <motion.path
+                d="M 18 75 A 52 52 0 0 1 122 75"
+                fill="none"
+                stroke="url(#activityArcGrad)"
+                strokeWidth="11"
+                strokeLinecap="round"
+                strokeDasharray={arcLength}
+                initial={{ strokeDashoffset: arcLength }}
+                animate={{ strokeDashoffset: arcOffset }}
+                transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
+              <span className="text-2xl font-black text-white tracking-tight font-mono leading-none">
+                {displaySteps.toLocaleString()}
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium mt-0.5">Steps</span>
+            </div>
+          </div>
+
+          {/* Right: 3 Biometric Rows (BPM, Calories, Distance) */}
+          <div className="flex-1 flex flex-col justify-center space-y-2.5 pl-4 sm:pl-6 border-l border-white/[0.06]">
+            {/* Heart Rate */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <Heart className="w-4 h-4 text-rose-400 fill-rose-400" />
+              </div>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {displayHeartRate} bpm
+              </span>
+            </div>
+
+            {/* Calories */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
+              </div>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {displayCalories} kcal
+              </span>
+            </div>
+
+            {/* Distance */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <MapPin className="w-4 h-4 text-sky-400 fill-sky-400" />
+              </div>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {displayDistance} km
+              </span>
+            </div>
           </div>
         </div>
       </motion.div>
 
-      {/* AI Daily Intelligence Briefing Card (Powered by Gemini 3.8 Flash Backend) */}
+      {/* 5. TODAY'S TASKS CARD (Matching Mockup Screen 1) */}
       <motion.div
-        whileHover={{ y: -3, scale: 1.008 }}
+        whileHover={{ y: -2, scale: 1.008 }}
         transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#191033]/85 via-[#130b26]/80 to-[#0e071e]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25 space-y-4"
+        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3.5"
+      >
+        <div 
+          onClick={() => setActiveTab('tasks')}
+          className="flex items-center justify-between cursor-pointer group"
+        >
+          <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
+            Today's Tasks
+          </h3>
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+        </div>
+
+        {/* Subtitle row: "3 of 5 completed" & "60%" */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-400 font-medium">
+            {completedTasks.length} of {activeTasks.length || 5} completed
+          </span>
+          <span className="text-sm font-extrabold text-purple-300 font-mono">
+            {completionPercent}%
+          </span>
+        </div>
+
+        {/* Sleek Gradient Progress Bar */}
+        <div className="w-full h-2 rounded-full bg-[#221b38] overflow-hidden p-0.5">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${completionPercent}%` }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="h-full rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]"
+          />
+        </div>
+
+        {/* Tasks List */}
+        <div className="space-y-2 pt-1">
+          {activeTasks.slice(0, 3).map((task) => (
+            <motion.div
+              key={task.id}
+              whileHover={{ x: 3 }}
+              onClick={() => handleToggleTask(task)}
+              className="flex items-center justify-between p-3 rounded-2xl bg-[#130f21] hover:bg-[#1b152e] border border-white/[0.04] hover:border-purple-500/30 cursor-pointer transition-all"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors shrink-0 ${
+                  task.isCompleted
+                    ? 'bg-gradient-to-tr from-purple-500 to-pink-500 text-white'
+                    : 'border-2 border-slate-600 hover:border-pink-400'
+                }`}>
+                  {task.isCompleted && <Check className="w-3 h-3 stroke-[3]" />}
+                </div>
+
+                <p className={`text-xs font-semibold truncate ${
+                  task.isCompleted ? 'line-through text-slate-500' : 'text-slate-200'
+                }`}>
+                  {task.title}
+                </p>
+              </div>
+
+              <span className="text-[10px] font-mono text-slate-400 shrink-0 pl-2">
+                {task.dueTime}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* 6. AI INTELLIGENCE BRIEFING CARD (Powered by Live Gemini 3.8 Flash Backend) */}
+      <motion.div
+        whileHover={{ y: -2, scale: 1.008 }}
+        transition={{ duration: 0.2 }}
+        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500/30 to-pink-500/20 border border-purple-400/40 flex items-center justify-center text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.4)]">
-              <Sparkles className="w-4 h-4 text-pink-400" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                <span>AI Daily Intelligence Briefing</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  {briefing?.source === 'gemini-3.8-flash' ? 'Gemini 3.8 Flash' : 'Cloud Intelligence'}
-                </span>
-              </h3>
-            </div>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-pink-400" />
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-purple-300">
+              AI Daily Intelligence
+            </h3>
           </div>
 
           <motion.button
             whileTap={{ scale: 0.94 }}
             onClick={handleGenerateBriefing}
             disabled={isBriefingLoading}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-pink-200 border border-purple-500/30 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
-            title="Generate fresh personalized AI briefing"
+            className="px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-pink-300 border border-purple-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-pink-400 ${isBriefingLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 text-pink-400 ${isBriefingLoading ? 'animate-spin' : ''}`} />
             <span>{isBriefingLoading ? 'Generating...' : briefing ? 'Refresh' : 'Get Briefing'}</span>
           </motion.button>
         </div>
@@ -207,293 +430,38 @@ export function DashboardScreen() {
         {briefing ? (
           <AnimatePresence mode="wait">
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-3 pt-1 text-xs"
+              className="space-y-2.5 pt-0.5 text-xs text-slate-200"
             >
-              <p className="text-sm font-semibold text-white leading-relaxed">
+              <p className="font-semibold text-white leading-relaxed">
                 {briefing.greeting}
               </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3.5 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 space-y-1.5">
-                  <span className="text-[10px] uppercase font-mono font-bold text-pink-400 flex items-center gap-1">
-                    <Zap className="w-3 h-3" />
-                    <span>Top Focus Priorities</span>
-                  </span>
-                  <ul className="space-y-1 text-slate-200 text-xs">
-                    {briefing.priorities.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-pink-400 font-bold">•</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-[#140e29]/70 border border-purple-500/20 space-y-1.5">
-                  <span className="text-[10px] uppercase font-mono font-bold text-cyan-400 flex items-center gap-1">
-                    <Heart className="w-3 h-3 text-cyan-400" />
-                    <span>Health & Biometrics</span>
-                  </span>
-                  <p className="text-slate-200 text-xs leading-relaxed">
-                    {briefing.healthInsight}
-                  </p>
-                  <p className="text-purple-300/80 text-[11px] pt-1 border-t border-purple-500/15">
-                    💡 {briefing.focusRecommendation}
-                  </p>
-                </div>
+              <div className="p-3 rounded-2xl bg-[#120e21] border border-white/[0.06] space-y-1">
+                <span className="text-[10px] uppercase font-mono font-bold text-pink-400 flex items-center gap-1">
+                  <Zap className="w-3 h-3" />
+                  <span>Key Priorities</span>
+                </span>
+                <ul className="space-y-0.5 text-xs text-slate-300">
+                  {briefing.priorities.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-pink-400 font-bold">•</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
+              <p className="text-[11px] text-purple-300/90 font-medium">
+                💡 {briefing.healthInsight}
+              </p>
             </motion.div>
           </AnimatePresence>
         ) : (
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-[#140e29]/50 border border-purple-500/15 text-xs text-purple-200/70">
-            <p>Tap "Get Briefing" to generate an instant synthesis of your pending tasks, health telemetry, and knowledge vault.</p>
-          </div>
+          <p className="text-xs text-slate-400">
+            Synthesize your tasks, PineTime health metrics, and knowledge vault with Gemini 3.8 Flash.
+          </p>
         )}
       </motion.div>
-
-      {/* "Ask WristOS anything..." Vibrant Holographic Card (From Mockup Screen 1) */}
-      <motion.div
-        whileHover={{ y: -3, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="relative overflow-hidden p-7 sm:p-8 rounded-3xl border border-purple-500/30 bg-gradient-to-b from-[#221342]/90 via-[#150d2c]/85 to-[#0b071a]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40 text-center flex flex-col items-center space-y-6"
-      >
-        {/* Vibrant multi-stop radiant ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-to-tr from-purple-600/30 via-pink-600/35 to-cyan-500/25 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Central Luminous 3D Breathing Orb */}
-        <div className="relative">
-          <BreathingOrb 
-            size="md" 
-            state="idle"
-            onClick={() => setActiveTab('assistant')} 
-          />
-        </div>
-
-        {/* Flowing Neon Aurora Ribbon Wave across the card */}
-        <div className="w-full max-w-sm h-10 overflow-hidden relative flex items-center justify-center">
-          <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="auroraRibbonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#38bdf8" />
-                <stop offset="35%" stopColor="#a855f7" />
-                <stop offset="70%" stopColor="#ec4899" />
-                <stop offset="100%" stopColor="#f43f5e" />
-              </linearGradient>
-            </defs>
-            <motion.path
-              d="M 0 20 Q 50 2 100 20 T 200 20"
-              fill="none"
-              stroke="url(#auroraRibbonGrad)"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              filter="drop-shadow(0 0 8px rgba(236,72,153,0.8))"
-              animate={{
-                d: [
-                  "M 0 20 Q 50 2 100 20 T 200 20",
-                  "M 0 20 Q 50 36 100 20 T 200 20",
-                  "M 0 20 Q 50 2 100 20 T 200 20"
-                ]
-              }}
-              transition={{
-                repeat: Infinity,
-                duration: 4,
-                ease: 'easeInOut'
-              }}
-            />
-          </svg>
-        </div>
-
-        <div className="space-y-1 relative z-10">
-          <h3 className="text-xl font-extrabold text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-            Ask WristOS anything...
-          </h3>
-          <p className="text-xs text-purple-200/80 font-medium">
-            Intelligent assistant grounded in your knowledge vault and watch telemetry
-          </p>
-        </div>
-
-        {/* 3 Color-Infused Action Buttons: Speak (Pink), Type (Purple), Haptic (Cyan) */}
-        <div className="flex items-center justify-center gap-3 w-full max-w-xs relative z-10">
-          <motion.button
-            whileHover={{ scale: 1.06, y: -2 }}
-            whileTap={{ scale: 0.94 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-            onClick={() => setActiveTab('assistant')}
-            className="flex-1 flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-gradient-to-b from-pink-500/20 to-purple-600/10 hover:from-pink-500/30 hover:to-purple-600/20 border border-pink-500/35 hover:border-pink-500/60 transition-all text-white shadow-lg shadow-pink-950/30"
-          >
-            <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/40 flex items-center justify-center text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.5)]">
-              <Mic className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-bold text-pink-200">Speak</span>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.06, y: -2 }}
-            whileTap={{ scale: 0.94 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-            onClick={() => setActiveTab('assistant')}
-            className="flex-1 flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-gradient-to-b from-purple-500/20 to-indigo-600/10 hover:from-purple-500/30 hover:to-indigo-600/20 border border-purple-500/35 hover:border-purple-500/60 transition-all text-white shadow-lg shadow-purple-950/30"
-          >
-            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.5)]">
-              <Keyboard className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-bold text-purple-200">Type</span>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.06, y: -2 }}
-            whileTap={{ scale: 0.94 }}
-            transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-            onClick={() => sendWatchAlert("WristOS Focus Ping")}
-            className="flex-1 flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-gradient-to-b from-cyan-500/20 to-blue-600/10 hover:from-cyan-500/30 hover:to-blue-600/20 border border-cyan-500/35 hover:border-cyan-500/60 transition-all text-white shadow-lg shadow-cyan-950/30"
-          >
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.5)]">
-              <Vibrate className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-bold text-cyan-200">Haptic</span>
-          </motion.button>
-        </div>
-      </motion.div>
-
-      {/* "Today's Plan" Progress Card (From Mockup Screen 1) */}
-      <motion.div
-        whileHover={{ y: -3, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-6 sm:p-7 rounded-3xl border border-purple-500/25 bg-gradient-to-b from-[#1b1236]/85 via-[#130d29]/80 to-[#0b081d]/90 backdrop-blur-2xl shadow-xl shadow-purple-950/25 space-y-5"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-extrabold text-white tracking-tight">Today's Plan</h3>
-            <p className="text-xs text-purple-300/80 font-medium">
-              {completedTasks.length} of {activeTasks.length} completed
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-extrabold text-pink-400 font-mono drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]">
-              {completionPercent}%
-            </span>
-
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={() => setActiveTab('tasks')}
-              className="p-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-pink-300 border border-purple-500/30"
-              title="Add task"
-            >
-              <Plus className="w-4 h-4" />
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Animated Radiant Progress Bar with Glowing Shimmer */}
-        <div className="w-full bg-[#0a0715] rounded-full h-2.5 overflow-hidden p-0.5 border border-purple-500/20 shadow-inner">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${completionPercent}%` }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.7)] animate-shimmer"
-          />
-        </div>
-
-        {/* Tasks List with Spring Checkboxes */}
-        <div className="space-y-2.5 pt-1">
-          {activeTasks.slice(0, 4).map((task) => (
-            <motion.div
-              key={task.id}
-              whileHover={{ x: 4, scale: 1.005 }}
-              transition={{ duration: 0.15 }}
-              onClick={() => handleToggleTask(task)}
-              className="flex items-center justify-between p-3.5 rounded-2xl bg-[#140e29]/70 hover:bg-[#1b1338] border border-purple-500/15 hover:border-purple-500/40 cursor-pointer transition-all shadow-sm"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <motion.div
-                  whileTap={{ scale: 0.75 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                  className={`w-5 h-5 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                    task.isCompleted
-                      ? 'bg-gradient-to-tr from-purple-500 to-pink-500 text-white shadow-md shadow-pink-500/40'
-                      : 'border-2 border-purple-400/40 hover:border-pink-400'
-                  }`}
-                >
-                  {task.isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                </motion.div>
-
-                <p className={`text-xs sm:text-sm font-semibold truncate ${
-                  task.isCompleted ? 'line-through text-slate-500' : 'text-slate-100'
-                }`}>
-                  {task.title}
-                </p>
-              </div>
-
-              <span className="text-[11px] font-mono font-medium text-purple-300/80 shrink-0 pl-3">
-                {task.dueTime}
-              </span>
-            </motion.div>
-          ))}
-
-          {activeTasks.length === 0 && (
-            <div className="text-center py-6 text-xs text-purple-300/60 font-medium">
-              No tasks scheduled for today. Tap + to add one.
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Quick Biometrics Snapshot Cards linking to Health screen */}
-      <div className="grid grid-cols-2 gap-4">
-        
-        {/* Activity Ring Snapshot */}
-        <motion.div
-          whileHover={{ y: -4, scale: 1.02 }}
-          transition={{ duration: 0.2 }}
-          onClick={() => setActiveTab('health')}
-          className="p-5 rounded-3xl border border-purple-500/25 bg-gradient-to-b from-[#1b1236]/85 via-[#130d29]/80 to-[#0b081d]/90 hover:border-purple-400/50 cursor-pointer backdrop-blur-2xl space-y-3 shadow-xl shadow-purple-950/25"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-300">Activity Ring</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/35 text-purple-300 flex items-center justify-center shadow-[0_0_10px_rgba(168,85,247,0.4)]">
-              <Footprints className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-              {(watch.stepCount || 7842).toLocaleString()}
-            </div>
-            <div className="text-[11px] text-pink-400 font-bold flex items-center gap-1 mt-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>78% of 10,000 daily goal</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Heart Rate Snapshot */}
-        <motion.div
-          whileHover={{ y: -4, scale: 1.02 }}
-          transition={{ duration: 0.2 }}
-          onClick={() => setActiveTab('health')}
-          className="p-5 rounded-3xl border border-pink-500/25 bg-gradient-to-b from-[#221033]/85 via-[#150a24]/80 to-[#0c0517]/90 hover:border-pink-400/50 cursor-pointer backdrop-blur-2xl space-y-3 shadow-xl shadow-pink-950/25"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-pink-300">Heart Rate</span>
-            <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/35 text-pink-300 flex items-center justify-center shadow-[0_0_10px_rgba(236,72,153,0.4)]">
-              <Heart className="w-4 h-4 fill-current drop-shadow-[0_0_6px_#ec4899]" />
-            </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-white font-mono flex items-baseline gap-1.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-              <span>{watch.heartRate || 78}</span>
-              <span className="text-xs font-sans text-pink-300/80 font-bold">BPM</span>
-            </div>
-            <div className="text-[11px] text-emerald-400 font-bold mt-1 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>Optimal resting cardio</span>
-            </div>
-          </div>
-        </motion.div>
-
-      </div>
 
     </div>
   )

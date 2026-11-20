@@ -14,13 +14,13 @@ import {
   Zap, 
   CheckSquare, 
   Bell, 
-  Brain, 
-  Calendar,
   ChevronRight,
   Keyboard,
   Camera,
-  History,
-  Square
+  Square,
+  ChevronLeft,
+  Pencil,
+  BookOpen
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { BreathingOrb } from './BreathingOrb'
@@ -36,6 +36,7 @@ interface Message {
 }
 
 export function AssistantScreen() {
+  const { setActiveTab } = useAppStore()
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -197,33 +198,32 @@ export function AssistantScreen() {
 
   // Quick suggestions directly matching reference mockup Screen 2
   const suggestions = [
-    { title: 'Add a task', query: 'Add task: Finish C assignment by 6:00 PM', icon: CheckSquare, color: 'from-blue-500/30 to-indigo-500/20 text-cyan-300 border-cyan-500/30' },
-    { title: 'Set a reminder', query: 'Set a reminder to drink water in 30 minutes', icon: Bell, color: 'from-pink-500/30 to-rose-500/20 text-pink-300 border-pink-500/30' },
-    { title: 'Remember this', query: 'Remember that I have a presentation with Dhruv on Friday', icon: Brain, color: 'from-amber-500/30 to-orange-500/20 text-amber-300 border-amber-500/30' },
-    { title: 'Plan my day', query: 'Plan my day and review pending tasks', icon: Calendar, color: 'from-purple-500/30 to-fuchsia-500/20 text-purple-300 border-purple-500/30' }
+    { title: 'Plan my day', query: 'Plan my day and review pending tasks', icon: Pencil },
+    { title: 'Add a task', query: 'Add a task: Finish project presentation by 6:00 PM', icon: CheckSquare },
+    { title: 'Set a reminder', query: 'Set a reminder to drink water in 30 minutes', icon: Bell },
+    { title: 'Remember this', query: 'Remember that my focus priority is C programming', icon: BookOpen }
   ]
 
   const orbState = isListening ? 'listening' : isLoading ? 'thinking' : isSpeaking ? 'speaking' : 'idle'
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)] relative">
+    <div className="flex flex-col h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)] max-w-md mx-auto w-full relative">
       
-      {/* Top Header Card */}
-      <div className="flex items-center justify-between p-4 mb-3 rounded-3xl border border-purple-500/25 bg-gradient-to-r from-[#1c123b]/85 via-[#130d29]/80 to-[#0b081d]/90 backdrop-blur-2xl shrink-0 shadow-lg shadow-purple-950/25">
-        <div className="flex items-center gap-3.5">
-          <div className="relative">
-            <BreathingOrb size="sm" state={orbState} className="!w-10 !h-10" />
-          </div>
-          <div>
-            <div className="text-xs font-extrabold text-white flex items-center gap-2">
-              <span>WristOS Intelligence</span>
-              <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-cyan-400 animate-ping' : 'bg-purple-400 shadow-[0_0_8px_#c084fc]'}`} />
-            </div>
-            <div className="text-[10px] text-purple-300 font-mono font-medium">
-              {memories.length} FACTS • {tasks.filter(t => !t.isCompleted).length} TASKS IN CONTEXT
-            </div>
-          </div>
-        </div>
+      {/* Top Header Card (Matching Mockup Screen 2) */}
+      <div className="flex items-center justify-between py-2 px-1 mb-2 shrink-0">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setActiveTab('dashboard')}
+          className="w-10 h-10 rounded-full bg-[#161224] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md"
+          title="Back to Home"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </motion.button>
+
+        <h2 className="text-base font-extrabold text-white tracking-tight">
+          AI Assistant
+        </h2>
 
         <div className="flex items-center gap-2">
           {/* Active "Stop Voice" button when AI is speaking */}
@@ -235,39 +235,26 @@ export function AssistantScreen() {
                 exit={{ scale: 0.9, opacity: 0 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={stopSpeaking}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse"
                 title="Stop AI Voice"
               >
                 <Square className="w-3 h-3 fill-current" />
-                <span>Stop Voice</span>
+                <span>Stop</span>
               </motion.button>
             )}
           </AnimatePresence>
 
-          {messages.length > 1 && (
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => setViewMode(viewMode === 'orb' ? 'chat' : 'orb')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all flex items-center gap-1.5"
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>{viewMode === 'orb' ? 'View Chat' : 'View Orb'}</span>
-            </motion.button>
-          )}
-
-          {/* Voice Auto-Reply Toggle (Default: Muted / Chat 1st) */}
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={toggleTts}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+            className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center ${
               ttsEnabled 
-                ? 'bg-gradient-to-r from-purple-500/25 to-pink-500/20 text-pink-300 border-pink-500/40 shadow-sm' 
-                : 'bg-[#140e29] text-purple-300/70 border-purple-500/25 hover:text-white'
+                ? 'bg-purple-500/20 text-pink-300 border-pink-500/40 shadow-sm' 
+                : 'bg-[#161224] text-slate-400 border-white/[0.08] hover:text-white'
             }`}
-            title={ttsEnabled ? "Voice Auto-Reply: ON (Click to mute)" : "Voice Auto-Reply: OFF (Replies in chat only)"}
+            title={ttsEnabled ? "Voice Auto-Reply: ON" : "Voice Auto-Reply: OFF (Replies in chat only)"}
           >
-            {ttsEnabled ? <Volume2 className="w-3.5 h-3.5 text-pink-400" /> : <VolumeX className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{ttsEnabled ? 'Voice: On' : 'Voice: Muted'}</span>
+            {ttsEnabled ? <Volume2 className="w-4 h-4 text-pink-400" /> : <VolumeX className="w-4 h-4" />}
           </motion.button>
         </div>
       </div>
@@ -303,21 +290,21 @@ export function AssistantScreen() {
                 return (
                   <motion.button
                     key={s.title}
-                    initial={{ opacity: 0, y: 12 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * idx, duration: 0.35 }}
-                    whileHover={{ scale: 1.02, x: 3 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={{ scale: 1.01, x: 2 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleSend(s.query)}
-                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-[#1a1236]/80 via-[#130d29]/75 to-[#0b081d]/90 hover:from-[#221747]/90 hover:to-[#170e33]/95 border border-purple-500/25 hover:border-purple-400/50 text-left transition-all group shadow-md shadow-purple-950/20"
+                    className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-[#161224] hover:bg-[#1f1933] border border-white/[0.08] hover:border-purple-500/40 text-left transition-all group shadow-md"
                   >
                     <div className="flex items-center gap-3.5">
-                      <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${s.color} border flex items-center justify-center group-hover:scale-110 transition-transform shadow-[0_0_12px_rgba(168,85,247,0.3)]`}>
-                        <Icon className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/20 flex items-center justify-center transition-colors">
+                        <Icon className="w-4 h-4 text-slate-300 group-hover:text-white" />
                       </div>
                       <span className="text-sm font-bold text-slate-100">{s.title}</span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-purple-400 group-hover:text-pink-400 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
                   </motion.button>
                 )
               })}
