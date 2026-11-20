@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { 
   Watch, 
   Battery, 
@@ -8,15 +8,29 @@ import {
   CheckCircle2, 
   Clock, 
   Heart, 
-  Cpu
+  Cpu,
+  Footprints,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { watchBleService } from '../lib/bleService'
 
 export function DevicesScreen() {
-  const { watch, connectWatch, disconnectWatch, sendWatchAlert } = useAppStore()
+  const { 
+    watch, 
+    isSimulated, 
+    lastAlertMessage, 
+    toggleSimulation, 
+    addSimulatedSteps, 
+    connectWatch, 
+    disconnectWatch, 
+    sendWatchAlert 
+  } = useAppStore()
+
   const [timeSyncStatus, setTimeSyncStatus] = useState<string | null>(null)
   const [hapticTestStatus, setHapticTestStatus] = useState<string | null>(null)
+  const [stepTestStatus, setStepTestStatus] = useState<string | null>(null)
   const [currentTimeStr, setCurrentTimeStr] = useState('')
 
   useEffect(() => {
@@ -32,15 +46,21 @@ export function DevicesScreen() {
   const isConnected = watch.connectionState === 'connected'
 
   const handleTestHaptic = () => {
-    sendWatchAlert("WristOS • Haptic Pulse Test")
-    setHapticTestStatus("Haptic alert dispatched to PineTime!")
-    setTimeout(() => setHapticTestStatus(null), 3000)
+    sendWatchAlert("Focus Alert • Take a short break!")
+    setHapticTestStatus("Haptic pulse dispatched to watch display!")
+    setTimeout(() => setHapticTestStatus(null), 3500)
   }
 
   const handleSyncTime = async () => {
     await watchBleService.syncTime()
     setTimeSyncStatus("Clock synchronized via CTS 0x1805")
     setTimeout(() => setTimeSyncStatus(null), 3000)
+  }
+
+  const handleAddSteps = () => {
+    addSimulatedSteps(500)
+    setStepTestStatus("+500 steps logged to daily activity ring!")
+    setTimeout(() => setStepTestStatus(null), 3000)
   }
 
   return (
@@ -51,6 +71,11 @@ export function DevicesScreen() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-semibold">HARDWARE & WEARABLES</span>
+            {isSimulated && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                Virtual Simulator Active
+              </span>
+            )}
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Smartwatch Management</h2>
           <p className="text-xs text-slate-400">
@@ -58,20 +83,32 @@ export function DevicesScreen() {
           </p>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.94 }}
-          transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-          onClick={isConnected ? disconnectWatch : connectWatch}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shrink-0 ${
-            isConnected
-              ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20'
-              : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/25'
-          }`}
-        >
-          <Watch className="w-4 h-4" />
-          <span>{isConnected ? 'Disconnect PineTime' : 'Scan & Connect BLE'}</span>
-        </motion.button>
+        <div className="flex items-center gap-2.5">
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => toggleSimulation()}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-medium text-xs bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08] transition-all shrink-0"
+            title="Toggle between Virtual Simulated Watch and Physical BLE"
+          >
+            {isSimulated ? <ToggleRight className="w-4 h-4 text-purple-400" /> : <ToggleLeft className="w-4 h-4 text-slate-500" />}
+            <span>{isSimulated ? 'Simulator Mode' : 'Physical BLE'}</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+            onClick={isConnected ? disconnectWatch : connectWatch}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shrink-0 ${
+              isConnected
+                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20'
+                : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/25'
+            }`}
+          >
+            <Watch className="w-4 h-4" />
+            <span>{isConnected ? 'Disconnect' : 'Scan Physical BLE'}</span>
+          </motion.button>
+        </div>
       </div>
 
       {/* Main Showcase Grid: Smartwatch 3D Mockup & Telemetry Status */}
@@ -102,12 +139,30 @@ export function DevicesScreen() {
                 }}
               />
 
+              {/* Incoming Haptic Alert Overlay */}
+              <AnimatePresence>
+                {lastAlertMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute inset-x-2 top-2 z-30 p-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl text-center border border-white/20"
+                  >
+                    <div className="flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-wider">
+                      <Vibrate className="w-3 h-3 animate-bounce" />
+                      <span>WristOS Alert</span>
+                    </div>
+                    <p className="text-[10px] font-semibold truncate mt-0.5">{lastAlertMessage}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Watch Display Top: Brand & Battery */}
               <div className="flex items-center justify-between z-10">
                 <span className="text-[10px] font-mono font-bold text-purple-300 tracking-wider">WristOS™</span>
                 <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
                   <Battery className="w-3 h-3 text-emerald-400" />
-                  <span>{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '87%'}</span>
+                  <span>{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}</span>
                 </div>
               </div>
 
@@ -117,7 +172,7 @@ export function DevicesScreen() {
                   {currentTimeStr || '10:24'}
                 </div>
                 <div className="text-[10px] text-slate-400 font-medium">
-                  Tue, 17 Nov
+                  {new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
                 </div>
 
                 {/* Animated Aurora Wave Ribbon */}
@@ -178,13 +233,13 @@ export function DevicesScreen() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <span>PineTime Smartwatch</span>
+                  <span>{watch.deviceName || 'PineTime Smartwatch'}</span>
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
                     isConnected 
                       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                       : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
                   }`}>
-                    {isConnected ? 'GATT Connected' : 'Simulated / Standby'}
+                    {isConnected ? (isSimulated ? 'Simulated BLE Connected' : 'GATT BLE Connected') : 'Disconnected'}
                   </span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -201,7 +256,7 @@ export function DevicesScreen() {
             <div className="grid grid-cols-3 gap-3 pt-1">
               <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-1">
                 <span className="text-[10px] text-slate-500 uppercase font-mono">BATTERY (BAS)</span>
-                <p className="text-base font-bold text-white font-mono">{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '87%'}</p>
+                <p className="text-base font-bold text-white font-mono">{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}</p>
               </div>
 
               <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-1">
@@ -238,17 +293,28 @@ export function DevicesScreen() {
                 <Clock className="w-3.5 h-3.5 text-purple-400" />
                 <span>Sync Time (CTS 0x1805)</span>
               </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.94 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                onClick={handleAddSteps}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08] flex items-center gap-2"
+              >
+                <Footprints className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Simulate Walking (+500 Steps)</span>
+              </motion.button>
             </div>
 
             {/* Feedback toasts */}
-            {(hapticTestStatus || timeSyncStatus) && (
+            {(hapticTestStatus || timeSyncStatus || stepTestStatus) && (
               <motion.p
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-xs text-emerald-400 font-medium flex items-center gap-1.5"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{hapticTestStatus || timeSyncStatus}</span>
+                <span>{hapticTestStatus || timeSyncStatus || stepTestStatus}</span>
               </motion.p>
             )}
           </div>

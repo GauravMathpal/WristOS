@@ -8,12 +8,12 @@ import {
   Trash2, 
   Tag, 
   Calendar,
-  CloudCheck,
+  CloudCheck, 
   CloudUpload,
   Copy,
   Check,
   Brain,
-  Sparkles,
+  Edit2,
   X
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react'
 export function MemoryScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingMemory, setEditingMemory] = useState<MemoryRecord | null>(null)
   const [newTag, setNewTag] = useState('Personal')
   const [newFact, setNewFact] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -51,10 +52,23 @@ export function MemoryScreen() {
     e.preventDefault()
     if (!newFact.trim()) return
 
-    await memoryRepository.add(newTag.trim() || 'General', newFact.trim())
+    if (editingMemory) {
+      await memoryRepository.update(editingMemory.id, newTag.trim() || 'General', newFact.trim())
+      setEditingMemory(null)
+    } else {
+      await memoryRepository.add(newTag.trim() || 'General', newFact.trim())
+    }
+
     setNewFact('')
     setNewTag('Personal')
     setShowAddModal(false)
+  }
+
+  const handleStartEdit = (m: MemoryRecord) => {
+    setEditingMemory(m)
+    setNewTag(m.tag)
+    setNewFact(m.fact)
+    setShowAddModal(true)
   }
 
   const predefinedTags = ['All', 'Health', 'Hardware', 'Preferences', 'Work', 'Routines']
@@ -84,7 +98,12 @@ export function MemoryScreen() {
           </div>
 
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setEditingMemory(null)
+              setNewFact('')
+              setNewTag('Personal')
+              setShowAddModal(true)
+            }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-slate-950 hover:bg-slate-200 font-semibold text-xs transition-all shadow-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -167,6 +186,13 @@ export function MemoryScreen() {
                       )}
                     </button>
                     <button
+                      onClick={() => handleStartEdit(m)}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-purple-300 hover:bg-white/[0.05] transition-colors"
+                      title="Edit fact"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => handleDelete(m.id)}
                       className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                       title="Delete fact"
@@ -216,37 +242,28 @@ export function MemoryScreen() {
                 {searchQuery ? `No memory matches "${searchQuery}".` : 'Store facts or let the assistant extract knowledge from your conversations.'}
               </p>
             </div>
-            {!searchQuery && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 border border-white/[0.08]"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Store your first fact</span>
-              </button>
-            )}
           </div>
         )}
       </div>
 
-      {/* Add Memory Modal */}
+      {/* Add / Edit Fact Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md p-6 rounded-2xl bg-[#0e131f] border border-white/[0.1] shadow-2xl space-y-5"
+            className="w-full max-w-md p-6 rounded-2xl bg-[#0f0b1a] border border-white/[0.1] shadow-2xl space-y-5"
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Sparkles className="w-3.5 h-3.5" />
-                </div>
-                <h3 className="text-sm font-semibold text-white">Store Knowledge Fact</h3>
-              </div>
+              <h3 className="text-sm font-bold text-white">
+                {editingMemory ? 'Edit Memory Fact' : 'Store Knowledge Fact'}
+              </h3>
               <button 
-                onClick={() => setShowAddModal(false)} 
-                className="text-slate-400 hover:text-white p-1 rounded-md"
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingMemory(null)
+                }}
+                className="text-slate-400 hover:text-white p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -254,43 +271,48 @@ export function MemoryScreen() {
 
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Category Tag</label>
+                <label className="text-xs font-medium text-slate-300">Category / Tag</label>
                 <input
                   type="text"
-                  placeholder="e.g. Health, Work, Sleep, Preferences"
+                  placeholder="e.g. Health, Work, Hardware, Preferences"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/20"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Fact Description</label>
+                <label className="text-xs font-medium text-slate-300">Fact or Context</label>
                 <textarea
-                  rows={3}
-                  placeholder="What should WristOS remember about you?"
+                  placeholder="e.g. Daily hydration goal is 3.5 liters; optimal cardio heart rate range is 125-145 BPM."
                   value={newFact}
                   onChange={(e) => setNewFact(e.target.value)}
+                  rows={4}
                   autoFocus
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/20 resize-none leading-relaxed"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
                 />
               </div>
 
               <div className="flex justify-end gap-2.5 pt-2">
-                <button
+                <motion.button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]"
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingMemory(null)
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200"
                 >
                   Cancel
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   type="submit"
+                  whileTap={{ scale: 0.94 }}
                   disabled={!newFact.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 disabled:opacity-40 transition-all"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 disabled:opacity-40 transition-all shadow-sm"
                 >
-                  Save Fact
-                </button>
+                  {editingMemory ? 'Update Fact' : 'Save Fact'}
+                </motion.button>
               </div>
             </form>
           </motion.div>

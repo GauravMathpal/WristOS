@@ -17,13 +17,20 @@ export const taskRepository = {
       .sortBy('createdAt')
   },
 
-  async add(title: string, dueTime: string = 'Today'): Promise<TaskRecord> {
+  async add(
+    title: string, 
+    dueTime: string = 'Today', 
+    priority: string = 'normal', 
+    category: string = 'general'
+  ): Promise<TaskRecord> {
     const now = Date.now()
     const task: TaskRecord = {
       id: `task-${now}-${Math.random().toString(36).substring(2, 7)}`,
       title: title.trim(),
       dueTime: dueTime.trim() || 'Today',
       isCompleted: false,
+      priority,
+      category,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -80,6 +87,17 @@ export const memoryRepository = {
     await db.memories.add(memory)
     syncService.triggerSync()
     return memory
+  },
+
+  async update(id: string, tag: string, fact: string): Promise<void> {
+    const now = Date.now()
+    await db.memories.update(id, {
+      tag: tag.trim() || 'General',
+      fact: fact.trim(),
+      updatedAt: now,
+      syncStatus: 'pending'
+    })
+    syncService.triggerSync()
   },
 
   async delete(id: string): Promise<void> {

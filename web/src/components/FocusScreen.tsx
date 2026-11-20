@@ -40,6 +40,28 @@ export function FocusScreen() {
     deep_work: { name: 'Deep Work', minutes: 45, icon: Flame }
   }
 
+  const playCompletionChime = () => {
+    try {
+      // @ts-expect-error Web Audio API compatibility
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime) // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3) // A5
+      gain.gain.setValueAtTime(0.3, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.8)
+    } catch {
+      // Web Audio policy
+    }
+  }
+
   // Handle timer ticks
   useEffect(() => {
     if (isRunning) {
@@ -52,6 +74,7 @@ export function FocusScreen() {
               clearInterval(intervalRef.current!)
               setIsRunning(false)
               setIsCompleted(true)
+              playCompletionChime()
               sendWatchAlert("Focus Session Complete! Take a break.")
               
               // Record history to Dexie local database and trigger sync

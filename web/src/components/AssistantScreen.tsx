@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { db, TaskRecord, MemoryRecord } from '../lib/db'
 import { taskRepository, memoryRepository } from '../lib/repository'
 import { queryAssistant } from '../lib/assistantService'
+import { useAppStore } from '../stores/useAppStore'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { 
   Sparkles, 
@@ -136,7 +137,8 @@ export function AssistantScreen() {
         await memoryRepository.add(parsedReply.action.memory.tag, parsedReply.action.memory.fact)
         actionBadge = `Vault Saved: [${parsedReply.action.memory.tag}]`
       } else if (parsedReply.action.type === 'ALERT' && parsedReply.action.alert) {
-        actionBadge = `Watch Alert Dispatched (0x1811 ANS)`
+        useAppStore.getState().sendWatchAlert(parsedReply.action.alert.message)
+        actionBadge = `Watch Alert Dispatched: "${parsedReply.action.alert.message}"`
       }
 
       const aiMessage: Message = {
