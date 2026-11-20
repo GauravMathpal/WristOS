@@ -5,26 +5,23 @@ export interface AssistantServiceParams {
   prompt: string
   memories: string[]
   tasks: string[]
-  apiKey?: string
 }
 
 export async function queryAssistant(params: AssistantServiceParams): Promise<ParsedReply> {
   const { prompt } = params
-  const clientApiKey = params.apiKey || (typeof window !== 'undefined' ? localStorage.getItem('wristos_gemini_api_key') || undefined : undefined)
   
   // Cost optimization: prune context payload to top 6 to prevent burning tokens
   const memories = (params.memories || []).slice(0, 6)
   const tasks = (params.tasks || []).slice(0, 6)
 
-  // 1. If Supabase is configured, call the secure gemini-chat Edge Function
+  // 1. If Supabase is configured, call the secure gemini-chat Edge Function (API key safely in backend secrets)
   if (isSupabaseConfigured) {
     try {
       const { data, error } = await supabase.functions.invoke('gemini-chat', {
         body: { 
           prompt, 
           memories, 
-          tasks,
-          apiKey: clientApiKey
+          tasks
         }
       })
 

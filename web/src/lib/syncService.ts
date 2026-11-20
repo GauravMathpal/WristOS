@@ -589,7 +589,6 @@ class SyncService {
     memories?: any[]
     activity?: any
     focusMinutes?: number
-    apiKey?: string
   }): Promise<DailyBriefingData | null> {
     if (!isSupabaseConfigured) return null
     try {
