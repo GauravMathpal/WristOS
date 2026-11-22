@@ -30,12 +30,13 @@ import {
   Radio,
   Search,
   CheckSquare,
-  Smartphone
+  Smartphone,
+  User
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 
 export function LandingPage() {
-  const { setViewMode, setActiveTab } = useAppStore()
+  const { setViewMode, setActiveTab, currentUser } = useAppStore()
 
   // 10 Native Firmware Screens (Built with LVGL 7 & FreeRTOS on WatchOS)
   const firmwareScreens = [
@@ -330,23 +331,23 @@ export function LandingPage() {
             <a href="#architecture" className="hover:text-white transition-colors">System Architecture</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setViewMode('login')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-purple-500/30 bg-[#16112c]/60 hover:bg-purple-900/30 text-xs font-bold text-purple-200 transition-all hover:scale-105"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-purple-500/35 bg-[#16112c]/80 hover:bg-purple-900/40 text-xs font-bold text-white transition-all hover:scale-105 shadow-md shadow-purple-950/40"
             >
-              <Bluetooth className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span>Pair Watch</span>
+              <User className="w-3.5 h-3.5 text-pink-400" />
+              <span>Log In / Profiles</span>
             </button>
 
             <button
               onClick={() => {
                 setViewMode('app')
-                setActiveTab('dashboard')
+                setActiveTab('profile')
               }}
               className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 hover:brightness-110 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all hover:scale-105 active:scale-95"
             >
-              <span>Launch Live App</span>
+              <span>Launch App ({currentUser?.name?.split(' ')[0] || 'User'})</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -412,10 +413,10 @@ export function LandingPage() {
 
             <button
               onClick={() => setViewMode('login')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border border-purple-500/30 bg-[#16102c]/70 hover:bg-purple-900/30 text-white font-semibold text-sm transition-all hover:scale-105"
+              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border border-purple-500/40 bg-[#16102c]/80 hover:bg-purple-900/40 text-white font-bold text-sm transition-all hover:scale-105 shadow-md shadow-purple-950/40"
             >
-              <Bluetooth className="w-4 h-4 text-cyan-400" />
-              <span>Pair Smartwatch</span>
+              <User className="w-4 h-4 text-pink-400" />
+              <span>Sign In / Profiles</span>
             </button>
 
             <a

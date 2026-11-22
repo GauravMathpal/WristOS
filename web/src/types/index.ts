@@ -1,5 +1,18 @@
-export type ActiveTab = 'dashboard' | 'assistant' | 'tasks' | 'focus' | 'health' | 'memory' | 'devices' | 'settings'
+export type ActiveTab = 'dashboard' | 'assistant' | 'tasks' | 'focus' | 'health' | 'memory' | 'devices' | 'settings' | 'profile'
 export type ViewMode = 'landing' | 'login' | 'app'
+
+export interface UserProfile {
+  id: string
+  name: string
+  email: string
+  avatarColor: string
+  role: string
+  bio?: string
+  dailyStepGoal: number
+  targetHeartRate: number
+  pairedWatchName: string
+  createdAt: number
+}
 
 export interface Task {
   id: string

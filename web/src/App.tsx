@@ -21,7 +21,8 @@ import {
   WifiOff,
   Heart,
   MoreHorizontal,
-  Globe
+  Globe,
+  User
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { DashboardScreen } from './components/DashboardScreen'
@@ -32,12 +33,13 @@ import { HealthScreen } from './components/HealthScreen'
 import { MemoryScreen } from './components/MemoryScreen'
 import { DevicesScreen } from './components/DevicesScreen'
 import { SettingsScreen } from './components/SettingsScreen'
+import { ProfileScreen } from './components/ProfileScreen'
 import { CommandPalette } from './components/CommandPalette'
 import { LandingPage } from './components/LandingPage'
 import { LoginScreen } from './components/LoginScreen'
 
 export function App() {
-  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch } = useAppStore()
+  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser } = useAppStore()
   const { mode, setMode } = useThemeStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -65,9 +67,10 @@ export function App() {
     return <LoginScreen />
   }
 
-  // Desktop navigation items (all 8 application sections)
+  // Desktop navigation items (all application sections)
   const navItems = [
     { id: 'dashboard' as const, label: 'Home', icon: Home, badge: null },
+    { id: 'profile' as const, label: 'My Profile', icon: User, badge: null },
     { id: 'assistant' as const, label: 'AI Assistant', icon: Sparkles, badge: 'AI' },
     { id: 'tasks' as const, label: 'Tasks', icon: CheckSquare, badge: null },
     { id: 'focus' as const, label: 'Focus', icon: Timer, badge: null },
@@ -340,13 +343,24 @@ export function App() {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#ec4899]" />
             </motion.button>
 
-            {/* Profile Avatar */}
+            {/* Profile Avatar / User Chip */}
             <div 
-              onClick={() => setActiveTab('settings')}
-              className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 p-[1.5px] cursor-pointer shadow-md shadow-purple-500/30 hover:scale-105 transition-transform"
+              onClick={() => setActiveTab('profile')}
+              className="flex items-center gap-2 px-2 py-1 rounded-2xl hover:bg-white/[0.05] border border-transparent hover:border-purple-500/20 cursor-pointer transition-all group"
+              title={`View ${currentUser.name}'s Profile`}
             >
-              <div className="w-full h-full rounded-full bg-[#0a0715] flex items-center justify-center font-bold text-xs text-white">
-                G
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentUser.avatarColor} p-[1.5px] shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform`}>
+                <div className="w-full h-full rounded-full bg-[#0a0715] flex items-center justify-center font-bold text-xs text-white">
+                  {currentUser.name.charAt(0)}
+                </div>
+              </div>
+              <div className="hidden lg:block text-left pr-1">
+                <p className="text-xs font-bold text-white leading-tight group-hover:text-pink-200 transition-colors">
+                  {currentUser.name.split(' ')[0]}
+                </p>
+                <p className="text-[10px] text-purple-300/70 font-mono leading-none">
+                  {currentUser.role.split(' ')[0]}
+                </p>
               </div>
             </div>
           </div>
@@ -364,6 +378,7 @@ export function App() {
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
               >
                 {activeTab === 'dashboard' && <DashboardScreen />}
+                {activeTab === 'profile' && <ProfileScreen />}
                 {activeTab === 'assistant' && <AssistantScreen />}
                 {activeTab === 'tasks' && <TasksScreen />}
                 {activeTab === 'focus' && <FocusScreen />}

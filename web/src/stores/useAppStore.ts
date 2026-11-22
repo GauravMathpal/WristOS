@@ -1,13 +1,86 @@
 import { create } from 'zustand'
-import { ActiveTab, ViewMode, WatchState } from '../types'
+import { ActiveTab, ViewMode, WatchState, UserProfile } from '../types'
 import { watchBleService } from '../lib/bleService'
 import { activityRepository } from '../lib/repository'
+
+export const DEFAULT_USERS: UserProfile[] = [
+  {
+    id: 'user-1',
+    name: 'Gaurav Mathpal',
+    email: 'gaurav@wristos.com',
+    avatarColor: 'from-purple-500 via-fuchsia-500 to-pink-500',
+    role: 'Lead Systems Architect & Creator',
+    bio: 'Building the next generation of ambient wearable intelligence on WatchOS & ARM Cortex-M4.',
+    dailyStepGoal: 10000,
+    targetHeartRate: 72,
+    pairedWatchName: 'WatchOS BLE Primary',
+    createdAt: 1700000000000
+  },
+  {
+    id: 'user-2',
+    name: 'Sarah Connor',
+    email: 'sarah@wristos.com',
+    avatarColor: 'from-cyan-500 via-teal-500 to-blue-600',
+    role: 'Endurance Athlete & Fitness Coach',
+    bio: 'Daily marathon training and biometric optimization with real-time BLE telemetry.',
+    dailyStepGoal: 12500,
+    targetHeartRate: 64,
+    pairedWatchName: "Sarah's WatchOS Pro",
+    createdAt: 1700100000000
+  },
+  {
+    id: 'user-3',
+    name: 'Alex Rivera',
+    email: 'alex@wristos.com',
+    avatarColor: 'from-amber-500 via-orange-500 to-rose-500',
+    role: 'Software Developer & Biohacker',
+    bio: 'Focus sprints, ambient memory logging, and continuous wellness tracking.',
+    dailyStepGoal: 8500,
+    targetHeartRate: 70,
+    pairedWatchName: 'Alex WristOS Dev',
+    createdAt: 1700200000000
+  }
+]
+
+const loadSavedUsers = (): UserProfile[] => {
+  if (typeof window === 'undefined') return DEFAULT_USERS
+  try {
+    const raw = localStorage.getItem('wristos_users_list')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch (_) {}
+  return DEFAULT_USERS
+}
+
+const loadSavedCurrentUser = (users: UserProfile[]): UserProfile => {
+  if (typeof window === 'undefined') return users[0]
+  try {
+    const currentId = localStorage.getItem('wristos_active_user_id')
+    if (currentId) {
+      const found = users.find(u => u.id === currentId)
+      if (found) return found
+    }
+  } catch (_) {}
+  return users[0]
+}
+
+const initialUsers = loadSavedUsers()
+const initialCurrentUser = loadSavedCurrentUser(initialUsers)
 
 interface AppState {
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
   activeTab: ActiveTab
   setActiveTab: (tab: ActiveTab) => void
+  currentUser: UserProfile
+  allUsers: UserProfile[]
+  loginUser: (user: UserProfile) => void
+  logoutUser: () => void
+  registerUser: (newUser: Omit<UserProfile, 'id' | 'createdAt'>) => UserProfile
+  updateCurrentUser: (updates: Partial<UserProfile>) => void
+  switchUser: (userId: string) => void
   watch: WatchState
   setWatch: (data: Partial<WatchState>) => void
   isSimulated: boolean
@@ -26,6 +99,74 @@ export const useAppStore = create<AppState>((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
+  currentUser: initialCurrentUser,
+  allUsers: initialUsers,
+
+  loginUser: (user: UserProfile) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wristos_active_user_id', user.id)
+    }
+    set({
+      currentUser: user,
+      viewMode: 'app',
+      activeTab: 'profile'
+    })
+  },
+
+  logoutUser: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('wristos_active_user_id')
+    }
+    set({
+      viewMode: 'login'
+    })
+  },
+
+  registerUser: (newUser) => {
+    const user: UserProfile = {
+      ...newUser,
+      id: `user-${Date.now()}`,
+      createdAt: Date.now()
+    }
+    const updatedUsers = [...get().allUsers, user]
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wristos_users_list', JSON.stringify(updatedUsers))
+      localStorage.setItem('wristos_active_user_id', user.id)
+    }
+    set({
+      allUsers: updatedUsers,
+      currentUser: user,
+      viewMode: 'app',
+      activeTab: 'profile'
+    })
+    return user
+  },
+
+  updateCurrentUser: (updates) => {
+    const updated = { ...get().currentUser, ...updates }
+    const updatedUsers = get().allUsers.map(u => u.id === updated.id ? updated : u)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wristos_users_list', JSON.stringify(updatedUsers))
+    }
+    set({
+      currentUser: updated,
+      allUsers: updatedUsers
+    })
+  },
+
+  switchUser: (userId) => {
+    const target = get().allUsers.find(u => u.id === userId)
+    if (target) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('wristos_active_user_id', target.id)
+      }
+      set({
+        currentUser: target,
+        activeTab: 'profile'
+      })
+    }
+  },
+
   isSimulated: true, // Default to simulated mode so all features work immediately without hardware
   lastAlertMessage: null,
   watch: {
