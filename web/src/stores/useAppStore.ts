@@ -104,20 +104,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           lastSyncTime: Date.now()
         }
       }))
-    } catch (e) {
-      console.warn('Physical BLE not connected, falling back to simulated watch mode:', e)
-      // Fallback gracefully to simulated connection so demo never breaks
-      set({
-        isSimulated: true,
+    } catch (e: any) {
+      console.warn('Physical BLE connection attempt failed:', e)
+      set((state) => ({
+        isSimulated: false,
         watch: {
-          deviceName: 'WatchOS (Virtual)',
-          connectionState: 'connected',
-          heartRate: 78,
-          stepCount: 7842,
-          batteryLevel: 94,
-          lastSyncTime: Date.now()
+          ...state.watch,
+          connectionState: 'disconnected',
+          deviceName: 'WatchOS'
         }
-      })
+      }))
+      throw e
     }
   },
 

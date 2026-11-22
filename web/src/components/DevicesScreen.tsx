@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   Check,
   Radio,
+  Bluetooth,
   Download,
   HardDrive,
   ShieldCheck
@@ -326,19 +327,71 @@ export function DevicesScreen() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-extrabold text-white">WatchOS Hardware</h3>
-                  <p className="text-[11px] text-slate-400">Nordic nRF52832 • ARM Cortex-M4F</p>
+                  <p className="text-[11px] text-slate-400">
+                    {isConnected && !isSimulated ? (
+                      <span className="text-emerald-400 font-semibold">● BLE Connected: {watch.deviceName}</span>
+                    ) : isSimulated ? (
+                      <span className="text-purple-400 font-semibold">Virtual Simulator Active</span>
+                    ) : (
+                      <span className="text-slate-400">Disconnected • Ready to Pair</span>
+                    )}
+                  </p>
                 </div>
-                <button
-                  onClick={isConnected ? disconnectWatch : connectWatch}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all ${
-                    isConnected
-                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  }`}
-                >
-                  {isConnected ? 'Disconnect' : 'Connect'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {isSimulated && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await connectWatch()
+                          showToast("Connected to physical WatchOS over BLE!")
+                        } catch (err: any) {
+                          showToast(err?.message || "Connection failed. Ensure Gadgetbridge is disconnected!")
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg hover:shadow-purple-500/20 border border-purple-400/30 transition-all flex items-center gap-1.5"
+                    >
+                      <Bluetooth className="w-3.5 h-3.5" />
+                      <span>Connect Physical Watch</span>
+                    </button>
+                  )}
+                  {(!isSimulated || !isConnected) && (
+                    <button
+                      onClick={async () => {
+                        if (isConnected) {
+                          await disconnectWatch()
+                          showToast("Disconnected from watch")
+                        } else {
+                          try {
+                            await connectWatch()
+                            showToast("Connected to physical WatchOS over BLE!")
+                          } catch (err: any) {
+                            showToast(err?.message || "Connection failed. Ensure Gadgetbridge is disconnected!")
+                          }
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                        isConnected
+                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                          : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      }`}
+                    >
+                      {isConnected ? 'Disconnect' : 'Connect BLE'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Troubleshooting helper alert when disconnected */}
+              {!isConnected && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
+                  <p className="font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                    <span>💡 Watch Connection Tip:</span>
+                  </p>
+                  <span>
+                    The watch's Bluetooth chip only accepts <strong>one active Bluetooth connection</strong> at a time. If <strong>Gadgetbridge</strong> or <strong>nRF Connect</strong> is running or connected on your phone, disconnect it first so your watch can advertise to the app.
+                  </span>
+                </div>
+              )}
 
               {/* Custom alert dispatch */}
               <form onSubmit={handleSendCustomAlert} className="flex gap-2 pt-1">

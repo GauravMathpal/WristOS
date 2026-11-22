@@ -133,15 +133,11 @@ class WatchBleService {
 
     // 2. Standard Web Bluetooth API (Google Chrome on Android, Windows, Mac, Linux)
     if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
-      try {
-        return await this.connectWebBluetooth(onTelemetry, onAiTrigger)
-      } catch (err: any) {
-        console.warn('Web Bluetooth cancelled or unavailable, using simulation fallback:', err)
-        return this.simulateConnection(onTelemetry)
-      }
+      return await this.connectWebBluetooth(onTelemetry, onAiTrigger)
     }
 
     // 3. Fallback to Simulator if browser lacks Bluetooth support
+    console.warn('Web Bluetooth API not supported in this browser. Using virtual telemetry.')
     return this.simulateConnection(onTelemetry)
   }
 
@@ -160,7 +156,10 @@ class WatchBleService {
           { namePrefix: 'InfiniTime' },
           { namePrefix: 'wristos' },
           { namePrefix: 'pinetime' },
-          { namePrefix: 'infinitime' }
+          { namePrefix: 'infinitime' },
+          { services: [INFINITIME_SERVICES.CTS] },
+          { services: [INFINITIME_SERVICES.HRS] },
+          { services: [INFINITIME_SERVICES.BAS] }
         ],
         optionalServices: [
           INFINITIME_SERVICES.CTS,
@@ -173,9 +172,9 @@ class WatchBleService {
       })
     } catch (filterErr: any) {
       if (filterErr.name === 'NotFoundError') {
-        throw filterErr
+        throw new Error('Bluetooth scan cancelled or no watch selected. Ensure Gadgetbridge is disconnected and the watch is awake.')
       }
-      // Fallback: prompt with acceptAllDevices if filters aren't matched
+      // Fallback: prompt with acceptAllDevices if filtered scan unsupported
       device = await navBle.requestDevice({
         acceptAllDevices: true,
         optionalServices: [

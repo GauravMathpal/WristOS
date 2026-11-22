@@ -38,10 +38,17 @@ class WatchBleManager(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             result?.device?.let { device ->
-                val name = device.name ?: ""
-                if (name.contains("WristOS", ignoreCase = true) ||
+                val name = device.name ?: result.scanRecord?.deviceName ?: ""
+                val hasMatch = name.contains("WristOS", ignoreCase = true) ||
                     name.contains("PineTime", ignoreCase = true) ||
-                    name.contains("InfiniTime", ignoreCase = true)) {
+                    name.contains("InfiniTime", ignoreCase = true)
+
+                val serviceUuids = result.scanRecord?.serviceUuids?.map { it.uuid } ?: emptyList()
+                val hasServices = serviceUuids.contains(BleConstants.SERVICE_CTS) ||
+                    serviceUuids.contains(BleConstants.SERVICE_HRS) ||
+                    serviceUuids.contains(BleConstants.SERVICE_BAS)
+
+                if (hasMatch || hasServices) {
                     stopScan()
                     connectToDevice(device)
                 }
@@ -49,6 +56,7 @@ class WatchBleManager(private val context: Context) {
         }
 
         override fun onScanFailed(errorCode: Int) {
+            Log.e("WatchBleManager", "Scan failed with error code: $errorCode")
             _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
             isScanning = false
         }
@@ -59,7 +67,7 @@ class WatchBleManager(private val context: Context) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _watchData.value = _watchData.value.copy(
                     connectionState = WatchConnectionState.CONNECTED,
-                    deviceName = gatt?.device?.name ?: "PineTime",
+                    deviceName = gatt?.device?.name ?: "WatchOS",
                     lastSyncTime = System.currentTimeMillis()
                 )
                 gatt?.discoverServices()
@@ -74,11 +82,17 @@ class WatchBleManager(private val context: Context) {
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
-                syncCurrentTime(gatt)
-                enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
-                enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
-                enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
-                readBattery(gatt)
+                scope.launch {
+                    syncCurrentTime(gatt)
+                    kotlinx.coroutines.delay(200)
+                    enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
+                    kotlinx.coroutines.delay(200)
+                    enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
+                    kotlinx.coroutines.delay(200)
+                    enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
+                    kotlinx.coroutines.delay(200)
+                    readBattery(gatt)
+                }
             }
         }
 
@@ -115,6 +129,20 @@ class WatchBleManager(private val context: Context) {
             return
         }
 
+        // Check if watch is already bonded in system settings
+        val bonded = bluetoothAdapter.bondedDevices
+        val pairedWatch = bonded?.firstOrNull { d ->
+            val name = d.name ?: ""
+            name.contains("WristOS", ignoreCase = true) ||
+            name.contains("PineTime", ignoreCase = true) ||
+            name.contains("InfiniTime", ignoreCase = true)
+        }
+        if (pairedWatch != null) {
+            Log.d("WatchBleManager", "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address})")
+            connectToDevice(pairedWatch)
+            return
+        }
+
         isScanning = true
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.SCANNING)
         scanner.startScan(scanCallback)
@@ -129,7 +157,11 @@ class WatchBleManager(private val context: Context) {
 
     private fun connectToDevice(device: BluetoothDevice) {
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.CONNECTING)
-        bluetoothGatt = device.connectGatt(context, false, gattCallback)
+        bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } else {
+            device.connectGatt(context, false, gattCallback)
+        }
     }
 
     fun disconnect() {
