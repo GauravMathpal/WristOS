@@ -150,8 +150,8 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                                 color = TextPrimary
                             )
                             Text(
-                                text = if (isConnected) "InfiniTime BLE • ${watchData.batteryLevel}% Battery"
-                                else "PineTime Companion Unlinked",
+                                text = if (isConnected) "WatchOS BLE • ${watchData.batteryLevel}% Battery"
+                                else "WatchOS Companion Unlinked",
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )

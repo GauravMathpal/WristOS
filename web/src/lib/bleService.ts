@@ -15,8 +15,8 @@ export const INFINITIME_SERVICES = {
   ANS: '00001811-0000-1000-8000-00805f9b34fb', // Alert Notification Service
   ANS_ALERT: '00002a46-0000-1000-8000-00805f9b34fb',
 
-  MOTION: '00000001-0002-0000-0000-000000000000', // Motion / Steps
-  MOTION_STEPS: '00000003-0002-0000-0000-000000000000',
+  MOTION: '00030000-78fc-48fe-8e23-433b3a1942d0', // InfiniTime Motion / Steps Service
+  MOTION_STEPS: '00030001-78fc-48fe-8e23-433b3a1942d0',
 
   EVENT: '00000000-78fc-48fe-8e23-433b3a1942d0', // WristOS Watch Event Service
   EVENT_TRIGGER: '00000001-78fc-48fe-8e23-433b3a1942d0'
@@ -255,6 +255,17 @@ class WatchBleService {
     try {
       const motion = await server.getPrimaryService(INFINITIME_SERVICES.MOTION)
       const stepsChar = await motion.getCharacteristic(INFINITIME_SERVICES.MOTION_STEPS)
+      // Read initial steps count immediately
+      try {
+        const val = await stepsChar.readValue()
+        if (val.byteLength >= 4) {
+          const steps = val.getUint32(0, true)
+          onTelemetry({ stepCount: steps })
+        }
+      } catch (readErr) {
+        console.warn('Initial steps read failed:', readErr)
+      }
+
       await stepsChar.startNotifications()
       stepsChar.addEventListener('characteristicvaluechanged', (ev: any) => {
         const val: DataView = ev.target.value

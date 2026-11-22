@@ -60,52 +60,62 @@ class VoiceManager(context: Context) {
     }
 
     fun startListening(onResult: (String) -> Unit) {
-        if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
-            return
-        }
-
-        stopSpeaking()
-        speechRecognizer?.destroy()
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        }
-
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                _isListening.value = true
-            }
-
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-
-            override fun onEndOfSpeech() {
-                _isListening.value = false
-            }
-
-            override fun onError(error: Int) {
-                _isListening.value = false
-            }
-
-            override fun onResults(results: Bundle?) {
-                _isListening.value = false
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    val recognized = matches[0]
-                    _speechText.value = recognized
-                    onResult(recognized)
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            try {
+                if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
+                    android.util.Log.w("VoiceManager", "Speech recognition service not available on device")
+                    return@post
                 }
+
+                stopSpeaking()
+                speechRecognizer?.destroy()
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
+
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                }
+
+                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        _isListening.value = true
+                    }
+
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+
+                    override fun onEndOfSpeech() {
+                        _isListening.value = false
+                    }
+
+                    override fun onError(error: Int) {
+                        android.util.Log.w("VoiceManager", "SpeechRecognizer error: $error")
+                        _isListening.value = false
+                    }
+
+                    override fun onResults(results: Bundle?) {
+                        _isListening.value = false
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            val recognized = matches[0]
+                            _speechText.value = recognized
+                            onResult(recognized)
+                        }
+                    }
+
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+
+                speechRecognizer?.startListening(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("VoiceManager", "Failed to start speech recognition", e)
+                _isListening.value = false
             }
-
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-
-        speechRecognizer?.startListening(intent)
+        }
     }
 
     fun stopListening() {

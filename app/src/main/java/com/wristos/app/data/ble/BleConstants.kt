@@ -20,8 +20,8 @@ object BleConstants {
     val CHAR_NEW_ALERT: UUID = UUID.fromString("00002a46-0000-1000-8000-00805f9b34fb")
 
     // InfiniTime Motion Service (Steps)
-    val SERVICE_MOTION: UUID = UUID.fromString("00000001-0002-0000-0000-000000000000")
-    val CHAR_STEPS: UUID = UUID.fromString("00000003-0002-0000-0000-000000000000")
+    val SERVICE_MOTION: UUID = UUID.fromString("00030000-78fc-48fe-8e23-433b3a1942d0")
+    val CHAR_STEPS: UUID = UUID.fromString("00030001-78fc-48fe-8e23-433b3a1942d0")
 
     // InfiniTime / WristOS Event Service (AI Trigger & Media)
     val SERVICE_MUSIC: UUID = UUID.fromString("00000000-78fc-48fe-8e23-433b3a1942d0")
@@ -39,7 +39,7 @@ enum class WatchConnectionState {
 }
 
 data class WatchData(
-    val deviceName: String = "PineTime",
+    val deviceName: String = "WatchOS",
     val connectionState: WatchConnectionState = WatchConnectionState.DISCONNECTED,
     val heartRate: Int = 0,
     val stepCount: Int = 0,

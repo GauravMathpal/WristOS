@@ -92,6 +92,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           }))
         },
         () => {
+          set({ activeTab: 'assistant' })
           window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
         }
       )

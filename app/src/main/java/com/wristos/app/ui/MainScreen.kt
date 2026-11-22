@@ -32,6 +32,22 @@ fun MainScreen() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val bleManager = com.wristos.app.data.ble.BleManagerProvider.getInstance(context)
+        bleManager.aiTriggerEvent.collect {
+            if (currentRoute != Screen.Assistant.route) {
+                navController.navigate(Screen.Assistant.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+    }
+
     Scaffold(
         containerColor = DarkBackground,
         bottomBar = {

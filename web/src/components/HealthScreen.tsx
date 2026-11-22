@@ -48,8 +48,12 @@ export function HealthScreen() {
 
   const { watch, setActiveTab, sendWatchAlert, isSimulated } = useAppStore()
 
-  const displaySteps = watch.stepCount > 0 ? watch.stepCount : 7842
-  const displayHeartRate = watch.heartRate > 0 ? watch.heartRate : 78
+  const displaySteps = (!isSimulated && watch.connectionState === 'connected')
+    ? (watch.stepCount ?? 0)
+    : (watch.stepCount > 0 ? watch.stepCount : 7842)
+  const displayHeartRate = (!isSimulated && watch.connectionState === 'connected')
+    ? (watch.heartRate ?? 0)
+    : (watch.heartRate > 0 ? watch.heartRate : 78)
 
   const todayStr = new Date().toISOString().split('T')[0]
 

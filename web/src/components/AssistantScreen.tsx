@@ -176,22 +176,6 @@ export function AssistantScreen() {
       recognitionRef.current = null
     }
 
-    // Request microphone permission via getUserMedia first if available so Chrome pops permission banner
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        // Immediately release tracks so speech engine can acquire it cleanly
-        stream.getTracks().forEach((track) => track.stop())
-      } catch (permErr: any) {
-        console.warn("Microphone permission denied:", permErr)
-        if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
-          setMicError("Microphone permission was denied. Please allow microphone access in your browser address bar (click the lock/site icon) or click any test voice command below.")
-          setIsListening(false)
-          return
-        }
-      }
-    }
-
     try {
       const recognition = new SpeechClass()
       recognitionRef.current = recognition

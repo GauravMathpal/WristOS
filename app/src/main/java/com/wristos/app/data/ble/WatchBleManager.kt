@@ -92,6 +92,8 @@ class WatchBleManager(private val context: Context) {
                     enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
                     kotlinx.coroutines.delay(200)
                     readBattery(gatt)
+                    kotlinx.coroutines.delay(200)
+                    readSteps(gatt)
                 }
             }
         }
@@ -204,6 +206,12 @@ class WatchBleManager(private val context: Context) {
     private fun readBattery(gatt: BluetoothGatt) {
         val bas = gatt.getService(BleConstants.SERVICE_BAS)
         val char = bas?.getCharacteristic(BleConstants.CHAR_BATTERY_LEVEL) ?: return
+        gatt.readCharacteristic(char)
+    }
+
+    private fun readSteps(gatt: BluetoothGatt) {
+        val motion = gatt.getService(BleConstants.SERVICE_MOTION)
+        val char = motion?.getCharacteristic(BleConstants.CHAR_STEPS) ?: return
         gatt.readCharacteristic(char)
     }
 

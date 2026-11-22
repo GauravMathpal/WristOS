@@ -41,7 +41,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 
 export function DashboardScreen() {
-  const { watch, sendWatchAlert, setActiveTab } = useAppStore()
+  const { watch, sendWatchAlert, setActiveTab, isSimulated } = useAppStore()
   
   // Live Dexie database queries
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
@@ -186,11 +186,17 @@ export function DashboardScreen() {
     setIsBriefingLoading(false)
   }
 
-  const displaySteps = watch.stepCount > 0 ? watch.stepCount : 7842
-  const displayHeartRate = watch.heartRate > 0 ? watch.heartRate : 78
-  const displayCalories = Math.round(displaySteps * 0.04) || 312
-  const displayDistance = (displaySteps * 0.00075).toFixed(1) || '5.4'
-  const displayBattery = watch.batteryLevel > 0 ? watch.batteryLevel : 87
+  const displaySteps = (!isSimulated && isConnected)
+    ? (watch.stepCount ?? 0)
+    : (watch.stepCount > 0 ? watch.stepCount : 7842)
+  const displayHeartRate = (!isSimulated && isConnected)
+    ? (watch.heartRate ?? 0)
+    : (watch.heartRate > 0 ? watch.heartRate : 78)
+  const displayCalories = Math.round(displaySteps * 0.04) || 0
+  const displayDistance = (displaySteps * 0.00075).toFixed(1) || '0.0'
+  const displayBattery = (!isSimulated && isConnected)
+    ? (watch.batteryLevel ?? 0)
+    : (watch.batteryLevel > 0 ? watch.batteryLevel : 87)
 
   // Semicircular Arc Gauge calculation
   const arcLength = 163.36
