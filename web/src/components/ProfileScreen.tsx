@@ -29,8 +29,7 @@ export function ProfileScreen() {
     setActiveTab, 
     setViewMode,
     watch, 
-    sendWatchAlert,
-    isSimulated 
+    sendWatchAlert
   } = useAppStore()
 
   const [isEditing, setIsEditing] = useState(false)
@@ -42,10 +41,8 @@ export function ProfileScreen() {
   const [saveSuccess, setSaveSuccess] = useState(false)
 
   const isConnected = watch.connectionState === 'connected'
-  const displaySteps = (!isSimulated && isConnected) 
-    ? (watch.stepCount ?? 0) 
-    : (watch.stepCount > 0 ? watch.stepCount : 7842)
-  const stepProgress = Math.min(100, Math.round((displaySteps / currentUser.dailyStepGoal) * 100))
+  const displaySteps = watch.stepCount ?? 0
+  const stepProgress = Math.min(100, Math.round((displaySteps / (currentUser.dailyStepGoal || 10000)) * 100))
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault()

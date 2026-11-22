@@ -34,6 +34,8 @@ class WatchBleService {
   // Web Bluetooth handles
   private webDevice: any = null
   private webServer: any = null
+  private stepsChar: any = null
+  private batteryChar: any = null
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return
@@ -229,6 +231,7 @@ class WatchBleService {
     try {
       const bas = await server.getPrimaryService(INFINITIME_SERVICES.BAS)
       const batChar = await bas.getCharacteristic(INFINITIME_SERVICES.BAS_LEVEL)
+      this.batteryChar = batChar
       const val = await batChar.readValue()
       onTelemetry({ batteryLevel: val.getUint8(0) })
     } catch (e) {
@@ -255,6 +258,7 @@ class WatchBleService {
     try {
       const motion = await server.getPrimaryService(INFINITIME_SERVICES.MOTION)
       const stepsChar = await motion.getCharacteristic(INFINITIME_SERVICES.MOTION_STEPS)
+      this.stepsChar = stepsChar
       // Read initial steps count immediately
       try {
         const val = await stepsChar.readValue()
@@ -341,6 +345,78 @@ class WatchBleService {
       this.webDevice = null
       this.webServer = null
     }
+    this.stepsChar = null
+    this.batteryChar = null
+  }
+
+  public async readTelemetry(): Promise<Partial<WatchTelemetry>> {
+    const result: Partial<WatchTelemetry> = {}
+
+    // 1. Capacitor Native Platform
+    if (this.deviceId && Capacitor.isNativePlatform()) {
+      try {
+        const batVal = await BleClient.read(this.deviceId, INFINITIME_SERVICES.BAS, INFINITIME_SERVICES.BAS_LEVEL)
+        result.batteryLevel = batVal.getUint8(0)
+      } catch (e) {
+        console.warn('Native battery read failed:', e)
+      }
+      try {
+        const stepVal = await BleClient.read(this.deviceId, INFINITIME_SERVICES.MOTION, INFINITIME_SERVICES.MOTION_STEPS)
+        if (stepVal.byteLength >= 4) {
+          result.stepCount = stepVal.getUint32(0, true)
+        }
+      } catch (e) {
+        console.warn('Native steps read failed:', e)
+      }
+      return result
+    }
+
+    // 2. Web Bluetooth Platform
+    if (this.webServer && this.webDevice?.gatt?.connected) {
+      if (this.stepsChar) {
+        try {
+          const val = await this.stepsChar.readValue()
+          if (val.byteLength >= 4) {
+            result.stepCount = val.getUint32(0, true)
+          }
+        } catch (e) {
+          console.warn('Web Bluetooth steps read failed:', e)
+        }
+      } else {
+        try {
+          const motion = await this.webServer.getPrimaryService(INFINITIME_SERVICES.MOTION)
+          const char = await motion.getCharacteristic(INFINITIME_SERVICES.MOTION_STEPS)
+          this.stepsChar = char
+          const val = await char.readValue()
+          if (val.byteLength >= 4) {
+            result.stepCount = val.getUint32(0, true)
+          }
+        } catch (e) {
+          console.warn('Web Bluetooth steps lookup failed:', e)
+        }
+      }
+
+      if (this.batteryChar) {
+        try {
+          const val = await this.batteryChar.readValue()
+          result.batteryLevel = val.getUint8(0)
+        } catch (e) {
+          console.warn('Web Bluetooth battery read failed:', e)
+        }
+      } else {
+        try {
+          const bas = await this.webServer.getPrimaryService(INFINITIME_SERVICES.BAS)
+          const char = await bas.getCharacteristic(INFINITIME_SERVICES.BAS_LEVEL)
+          this.batteryChar = char
+          const val = await char.readValue()
+          result.batteryLevel = val.getUint8(0)
+        } catch (e) {
+          console.warn('Web Bluetooth battery lookup failed:', e)
+        }
+      }
+    }
+
+    return result
   }
 
   public async syncTime(): Promise<void> {

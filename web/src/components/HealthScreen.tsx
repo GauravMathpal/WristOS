@@ -17,7 +17,8 @@ import {
   Sparkles,
   X,
   Award,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react'
 import { ActivityRing } from './ActivityRing'
 import { useAppStore } from '../stores/useAppStore'
@@ -46,35 +47,58 @@ export function HealthScreen() {
   const [newMedTime, setNewMedTime] = useState('09:00 AM')
   const [newMedInstructions, setNewMedInstructions] = useState('')
 
-  const { watch, setActiveTab, sendWatchAlert, isSimulated } = useAppStore()
-
-  const displaySteps = (!isSimulated && watch.connectionState === 'connected')
-    ? (watch.stepCount ?? 0)
-    : (watch.stepCount > 0 ? watch.stepCount : 7842)
-  const displayHeartRate = (!isSimulated && watch.connectionState === 'connected')
-    ? (watch.heartRate ?? 0)
-    : (watch.heartRate > 0 ? watch.heartRate : 78)
+  const { watch, setActiveTab, sendWatchAlert, isSimulated, syncWatchTelemetry, connectWatch } = useAppStore()
+  const isConnected = watch.connectionState === 'connected'
+  const [isSyncing, setIsSyncing] = useState(false)
 
   const todayStr = new Date().toISOString().split('T')[0]
 
   // Live Dexie queries
+  const todayActivity = useLiveQuery(() => activityRepository.getToday())
   const weeklyLogs = useLiveQuery(() => activityRepository.getWeekly()) || []
   const habits = useLiveQuery(() => db.habits.filter(h => !h.deletedAt).toArray(), []) || []
   const hydration = useLiveQuery(() => db.hydrationLogs.where('date').equals(todayStr).first(), [todayStr])
   const medications = useLiveQuery(() => db.medications.filter(m => !m.deletedAt).toArray(), []) || []
+
+  const displaySteps = watch.stepCount > 0 
+    ? watch.stepCount 
+    : (todayActivity?.steps ?? 0)
+  const displayHeartRate = watch.heartRate > 0 
+    ? watch.heartRate 
+    : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3000)
   }
 
+  const handleSyncWatch = async () => {
+    setIsSyncing(true)
+    try {
+      if (!isConnected) {
+        showToast('Connecting to Watch via Bluetooth...')
+        await connectWatch()
+        showToast('Watch connected & biometrics synced')
+      } else {
+        await syncWatchTelemetry()
+        showToast(`Synced: ${(watch.stepCount || 0).toLocaleString()} steps`)
+      }
+    } catch (e: any) {
+      showToast('Could not sync: ' + (e?.message || 'Check BLE'))
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   // Auto-record today's biometrics to Dexie
   useEffect(() => {
-    activityRepository.recordDailyMetrics({
-      steps: displaySteps,
-      stepGoal: stepGoal,
-      heartRateAvg: displayHeartRate
-    })
+    if (displaySteps > 0 || displayHeartRate > 0) {
+      activityRepository.recordDailyMetrics({
+        steps: displaySteps,
+        stepGoal: stepGoal,
+        heartRateAvg: displayHeartRate
+      })
+    }
   }, [displaySteps, displayHeartRate, stepGoal])
 
   // Map weekly logs into the bar chart
@@ -94,15 +118,19 @@ export function HealthScreen() {
           isToday: day === todayDayName
         }
       })
-    : [
-        { day: 'Mon', percent: 55, steps: '5,500', isToday: todayDayName === 'Mon' },
-        { day: 'Tue', percent: 70, steps: '7,020', isToday: todayDayName === 'Tue' },
-        { day: 'Wed', percent: 60, steps: '6,140', isToday: todayDayName === 'Wed' },
-        { day: 'Thu', percent: 85, steps: '8,510', isToday: todayDayName === 'Thu' },
-        { day: 'Fri', percent: 95, steps: '9,842', isToday: todayDayName === 'Fri' },
-        { day: 'Sat', percent: 78, steps: '7,842', isToday: todayDayName === 'Sat' },
-        { day: 'Sun', percent: 45, steps: '4,500', isToday: todayDayName === 'Sun' }
-      ]
+    : [6, 5, 4, 3, 2, 1, 0].map((offset) => {
+        const d = new Date(Date.now() - offset * 86400000)
+        const day = dayNames[d.getDay()]
+        const isToday = offset === 0
+        const steps = isToday ? displaySteps : 0
+        const percent = Math.min(100, Math.round((steps / stepGoal) * 100))
+        return {
+          day,
+          percent,
+          steps: steps.toLocaleString(),
+          isToday
+        }
+      })
 
   // Wellness Handlers
   const handleToggleHabit = async (id: string) => {
@@ -218,6 +246,31 @@ export function HealthScreen() {
             </button>
           )
         })}
+      </div>
+
+      {/* Live Sync Status & Manual Trigger Bar */}
+      <div className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[#161224]/80 border border-white/[0.06] text-xs">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-500'}`} />
+          <span className="text-slate-300 font-medium text-[11px]">
+            {isConnected ? 'WatchOS Telemetry Live' : 'WatchOS Disconnected'}
+          </span>
+          {isConnected && (
+            <span className="text-[10px] text-purple-300 font-mono">
+              • {(watch.stepCount || 0).toLocaleString()} steps
+            </span>
+          )}
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={handleSyncWatch}
+          disabled={isSyncing}
+          className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
+        >
+          <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-pink-400' : ''}`} />
+          <span>{isSyncing ? 'Syncing...' : isConnected ? 'Sync Watch' : 'Connect'}</span>
+        </motion.button>
       </div>
 
       {/* 3. SUBTAB VIEWS */}

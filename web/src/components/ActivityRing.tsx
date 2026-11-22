@@ -13,11 +13,11 @@ interface ActivityRingProps {
 }
 
 export function ActivityRing({
-  steps = 7842,
+  steps = 0,
   goal = 10000,
-  calories = 312,
-  distanceKm = 5.4,
-  activeMinutes = 48,
+  calories = 0,
+  distanceKm = 0.0,
+  activeMinutes = 0,
   size = 240,
   strokeWidth = 20,
   className = ''

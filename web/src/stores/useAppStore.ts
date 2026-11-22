@@ -89,6 +89,7 @@ interface AppState {
   addSimulatedSteps: (count: number) => void
   connectWatch: () => Promise<void>
   disconnectWatch: () => Promise<void>
+  syncWatchTelemetry: () => Promise<void>
   sendWatchAlert: (msg?: string) => Promise<void>
 }
 
@@ -167,15 +168,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  isSimulated: true, // Default to simulated mode so all features work immediately without hardware
+  isSimulated: false, // Default to real device connection
   lastAlertMessage: null,
   watch: {
-    deviceName: 'WatchOS (Virtual)',
-    connectionState: 'connected',
-    heartRate: 78,
-    stepCount: 7842,
-    batteryLevel: 94,
-    lastSyncTime: Date.now()
+    deviceName: 'WatchOS',
+    connectionState: 'disconnected',
+    heartRate: 0,
+    stepCount: 0,
+    batteryLevel: 100,
+    lastSyncTime: null
   },
 
   setWatch: (data) => set((state) => ({ watch: { ...state.watch, ...data } })),
@@ -189,7 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           deviceName: 'WatchOS (Virtual)',
           connectionState: 'connected',
           heartRate: 78,
-          stepCount: get().watch.stepCount > 0 ? get().watch.stepCount : 7842,
+          stepCount: get().watch.stepCount > 0 ? get().watch.stepCount : 1250,
           batteryLevel: 94,
           lastSyncTime: Date.now()
         }
@@ -207,7 +208,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addSimulatedSteps: (count: number) => {
-    const currentSteps = get().watch.stepCount || 7842
+    const currentSteps = get().watch.stepCount || 0
     const newSteps = currentSteps + count
     set((state) => ({
       watch: {
@@ -220,7 +221,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   connectWatch: async () => {
-    set((state) => ({ watch: { ...state.watch, connectionState: 'connecting' } }))
+    set((state) => ({ 
+      watch: { 
+        ...state.watch, 
+        connectionState: 'connecting' 
+      } 
+    }))
     try {
       const name = await watchBleService.scanAndConnect(
         (telemetry) => {
@@ -231,6 +237,18 @@ export const useAppStore = create<AppState>((set, get) => ({
               lastSyncTime: Date.now()
             }
           }))
+          // Live sync real telemetry into Dexie activity repository
+          const steps = telemetry.stepCount !== undefined ? telemetry.stepCount : get().watch.stepCount
+          const hr = telemetry.heartRate !== undefined ? telemetry.heartRate : get().watch.heartRate
+          if (steps > 0 || hr > 0) {
+            activityRepository.recordDailyMetrics({
+              steps,
+              stepGoal: get().currentUser?.dailyStepGoal || 10000,
+              heartRateAvg: hr > 0 ? hr : undefined,
+              calories: Math.round(steps * 0.04),
+              distanceKm: parseFloat((steps * 0.00075).toFixed(2))
+            }).catch(console.warn)
+          }
         },
         () => {
           set({ activeTab: 'assistant' })
@@ -246,6 +264,29 @@ export const useAppStore = create<AppState>((set, get) => ({
           lastSyncTime: Date.now()
         }
       }))
+      // Actively pull fresh telemetry once connected
+      try {
+        const fresh = await watchBleService.readTelemetry()
+        if (fresh.stepCount !== undefined || fresh.batteryLevel !== undefined) {
+          set((state) => ({
+            watch: {
+              ...state.watch,
+              ...fresh,
+              lastSyncTime: Date.now()
+            }
+          }))
+          if (fresh.stepCount !== undefined) {
+            await activityRepository.recordDailyMetrics({
+              steps: fresh.stepCount,
+              stepGoal: get().currentUser?.dailyStepGoal || 10000,
+              calories: Math.round(fresh.stepCount * 0.04),
+              distanceKm: parseFloat((fresh.stepCount * 0.00075).toFixed(2))
+            })
+          }
+        }
+      } catch (pollErr) {
+        console.warn('Initial post-connect telemetry poll:', pollErr)
+      }
     } catch (e: any) {
       console.warn('Physical BLE connection attempt failed:', e)
       set((state) => ({
@@ -257,6 +298,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }))
       throw e
+    }
+  },
+
+  syncWatchTelemetry: async () => {
+    if (get().watch.connectionState !== 'connected') {
+      await get().connectWatch()
+      return
+    }
+    try {
+      const fresh = await watchBleService.readTelemetry()
+      set((state) => ({
+        watch: {
+          ...state.watch,
+          ...fresh,
+          lastSyncTime: Date.now()
+        }
+      }))
+      const steps = fresh.stepCount !== undefined ? fresh.stepCount : get().watch.stepCount
+      const hr = fresh.heartRate !== undefined ? fresh.heartRate : get().watch.heartRate
+      await activityRepository.recordDailyMetrics({
+        steps,
+        stepGoal: get().currentUser?.dailyStepGoal || 10000,
+        heartRateAvg: hr > 0 ? hr : undefined,
+        calories: Math.round(steps * 0.04),
+        distanceKm: parseFloat((steps * 0.00075).toFixed(2))
+      })
+    } catch (e) {
+      console.warn('Sync watch telemetry failed:', e)
     }
   },
 

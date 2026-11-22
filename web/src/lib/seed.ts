@@ -138,7 +138,7 @@ export async function seedInitialDataIfEmpty() {
       { offset: 3, steps: 8500, hr: 80 },
       { offset: 2, steps: 9500, hr: 82 },
       { offset: 1, steps: 6000, hr: 75 },
-      { offset: 0, steps: 7842, hr: 78 } // Today
+      { offset: 0, steps: 0, hr: 0 } // Today starts at 0 until live watch telemetry syncs
     ]
 
     const initialActivities: ActivityRecord[] = dayOffsets.map(({ offset, steps, hr }) => {

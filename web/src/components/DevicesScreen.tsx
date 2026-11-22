@@ -310,10 +310,10 @@ export function DevicesScreen() {
                   <div className="flex items-center justify-between text-[9px] font-mono text-slate-300 pt-1 border-t border-white/10">
                     <span className="flex items-center gap-1 text-pink-400 font-bold">
                       <Heart className="w-2.5 h-2.5 fill-current animate-pulse" />
-                      <span>{watch.heartRate || 78}</span>
+                      <span>{watch.heartRate > 0 ? watch.heartRate : '--'}</span>
                     </span>
                     <span className="text-purple-300 font-bold">
-                      {(watch.stepCount || 7842).toLocaleString()} st
+                      {(watch.stepCount || 0).toLocaleString()} st
                     </span>
                   </div>
                 </div>

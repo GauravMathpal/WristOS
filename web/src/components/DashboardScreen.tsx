@@ -8,7 +8,8 @@ import {
   taskRepository, 
   habitRepository, 
   hydrationRepository, 
-  memoryRepository 
+  memoryRepository,
+  activityRepository
 } from '../lib/repository'
 import { syncService, DailyBriefingData } from '../lib/syncService'
 import { weatherService, WeatherData } from '../lib/weatherService'
@@ -40,13 +41,14 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 
 export function DashboardScreen() {
-  const { watch, sendWatchAlert, setActiveTab, isSimulated, currentUser } = useAppStore()
+  const { watch, sendWatchAlert, setActiveTab, currentUser, syncWatchTelemetry, connectWatch } = useAppStore()
   
   // Live Dexie database queries
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || []
   const memories = useLiveQuery(() => db.memories.toArray(), []) || []
   const focusSessions = useLiveQuery(() => db.focusSessions.toArray(), []) || []
   const habits = useLiveQuery(() => db.habits.filter(h => !h.deletedAt).toArray(), []) || []
+  const todayActivity = useLiveQuery(() => activityRepository.getToday())
   const hydration = useLiveQuery(async () => {
     const todayStr = new Date().toISOString().split('T')[0]
     return db.hydrationLogs.where('date').equals(todayStr).first()
@@ -64,6 +66,7 @@ export function DashboardScreen() {
   const [greetingText, setGreetingText] = useState('Good Evening')
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [isSyncingWeather, setIsSyncingWeather] = useState(false)
+  const [isSyncingTelemetry, setIsSyncingTelemetry] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Quick Action Modal states
@@ -168,13 +171,20 @@ export function DashboardScreen() {
       .filter(f => !f.deletedAt)
       .reduce((acc, f) => acc + (f.durationMinutes || 0), 0)
 
+    const activeSteps = watch.stepCount > 0 
+      ? watch.stepCount 
+      : (todayActivity?.steps ?? 0)
+    const activeHr = watch.heartRate > 0 
+      ? watch.heartRate 
+      : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
+
     const result = await syncService.getDailyBriefing({
       tasks: activeTasks.map(t => ({ title: t.title, dueTime: t.dueTime, priority: t.priority, isCompleted: t.isCompleted })),
       memories: activeMemories.map(m => ({ tag: m.tag, fact: m.fact })),
       activity: {
-        steps: watch.stepCount || 7842,
-        stepGoal: 10000,
-        heartRateAvg: watch.heartRate || 78
+        steps: activeSteps,
+        stepGoal: currentUser?.dailyStepGoal || 10000,
+        heartRateAvg: activeHr > 0 ? activeHr : 72
       },
       focusMinutes: totalFocusMins
     })
@@ -185,17 +195,33 @@ export function DashboardScreen() {
     setIsBriefingLoading(false)
   }
 
-  const displaySteps = (!isSimulated && isConnected)
-    ? (watch.stepCount ?? 0)
-    : (watch.stepCount > 0 ? watch.stepCount : 7842)
-  const displayHeartRate = (!isSimulated && isConnected)
-    ? (watch.heartRate ?? 0)
-    : (watch.heartRate > 0 ? watch.heartRate : 78)
+  const handleSyncWatch = async () => {
+    setIsSyncingTelemetry(true)
+    try {
+      if (!isConnected) {
+        showToast('Connecting to WatchOS via Bluetooth...')
+        await connectWatch()
+        showToast('Watch connected & biometrics synced')
+      } else {
+        await syncWatchTelemetry()
+        showToast(`Synced: ${(watch.stepCount || 0).toLocaleString()} steps`)
+      }
+    } catch (e: any) {
+      showToast('Could not sync: ' + (e?.message || 'Check BLE'))
+    } finally {
+      setIsSyncingTelemetry(false)
+    }
+  }
+
+  const displaySteps = watch.stepCount > 0 
+    ? watch.stepCount 
+    : (todayActivity?.steps ?? 0)
+  const displayHeartRate = watch.heartRate > 0 
+    ? watch.heartRate 
+    : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
   const displayCalories = Math.round(displaySteps * 0.04) || 0
   const displayDistance = (displaySteps * 0.00075).toFixed(1) || '0.0'
-  const displayBattery = (!isSimulated && isConnected)
-    ? (watch.batteryLevel ?? 0)
-    : (watch.batteryLevel > 0 ? watch.batteryLevel : 87)
+  const displayBattery = watch.batteryLevel > 0 ? watch.batteryLevel : 100
 
   // Semicircular Arc Gauge calculation
   const arcLength = 163.36
@@ -419,17 +445,28 @@ export function DashboardScreen() {
         transition={{ duration: 0.2 }}
         className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
       >
-        <div 
-          onClick={() => setActiveTab('health')}
-          className="flex items-center justify-between cursor-pointer group"
-        >
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between">
+          <div 
+            onClick={() => setActiveTab('health')}
+            className="flex items-center gap-2 cursor-pointer group"
+          >
             <Activity className="w-4 h-4 text-pink-400" />
             <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
               Activity & Health
             </h3>
+            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleSyncWatch}
+            disabled={isSyncingTelemetry}
+            className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
+            title="Sync live telemetry from PineTime Watch"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncingTelemetry ? 'animate-spin text-pink-400' : ''}`} />
+            <span>{isSyncingTelemetry ? 'Syncing...' : isConnected ? 'Sync Watch' : 'Connect'}</span>
+          </motion.button>
         </div>
 
         <div className="flex items-center justify-between pt-1">
