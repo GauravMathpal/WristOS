@@ -87,6 +87,14 @@ class WatchBleManager(private val context: Context) {
             characteristic?.let { handleCharacteristicData(it) }
         }
 
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            handleCharacteristicData(characteristic, value)
+        }
+
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
