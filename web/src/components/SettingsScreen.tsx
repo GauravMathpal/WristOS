@@ -107,13 +107,23 @@ export function SettingsScreen() {
     const memories = await db.memories.toArray()
     const focusSessions = await db.focusSessions.toArray()
     const activityLogs = await db.activityLogs.toArray()
+    const habits = await db.habits.toArray()
+    const hydrationLogs = await db.hydrationLogs.toArray()
+    const medications = await db.medications.toArray()
+    const calendarEvents = await db.calendarEvents.toArray()
+    const routines = await db.routines.toArray()
     const exportData = {
-      version: '3.0',
+      version: '4.0',
       exportedAt: new Date().toISOString(),
       tasks,
       memories,
       focusSessions,
-      activityLogs
+      activityLogs,
+      habits,
+      hydrationLogs,
+      medications,
+      calendarEvents,
+      routines
     }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -122,7 +132,7 @@ export function SettingsScreen() {
     a.download = `wristos_backup_${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setExportNotice('Backup saved successfully to your downloads.')
+    setExportNotice('Complete WristOS ecosystem backup saved.')
     setTimeout(() => setExportNotice(null), 3000)
   }
 
@@ -138,7 +148,12 @@ export function SettingsScreen() {
         if (data.memories) await db.memories.bulkPut(data.memories)
         if (data.focusSessions) await db.focusSessions.bulkPut(data.focusSessions)
         if (data.activityLogs) await db.activityLogs.bulkPut(data.activityLogs)
-        setExportNotice('Data restored successfully!')
+        if (data.habits) await db.habits.bulkPut(data.habits)
+        if (data.hydrationLogs) await db.hydrationLogs.bulkPut(data.hydrationLogs)
+        if (data.medications) await db.medications.bulkPut(data.medications)
+        if (data.calendarEvents) await db.calendarEvents.bulkPut(data.calendarEvents)
+        if (data.routines) await db.routines.bulkPut(data.routines)
+        setExportNotice('Full data restored successfully!')
         syncService.triggerSync()
         setTimeout(() => setExportNotice(null), 4000)
       } catch {

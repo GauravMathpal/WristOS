@@ -23,6 +23,10 @@ object BleConstants {
     val SERVICE_MOTION: UUID = UUID.fromString("00000001-0002-0000-0000-000000000000")
     val CHAR_STEPS: UUID = UUID.fromString("00000003-0002-0000-0000-000000000000")
 
+    // InfiniTime / WristOS Event Service (AI Trigger & Media)
+    val SERVICE_MUSIC: UUID = UUID.fromString("00000000-78fc-48fe-8e23-433b3a1942d0")
+    val CHAR_MUSIC_EVENT: UUID = UUID.fromString("00000001-78fc-48fe-8e23-433b3a1942d0")
+
     // Client Characteristic Configuration Descriptor (for notifications)
     val CLIENT_CHARACTERISTIC_CONFIG: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 }

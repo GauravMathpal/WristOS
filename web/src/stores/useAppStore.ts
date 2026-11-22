@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import { ActiveTab, WatchState } from '../types'
+import { ActiveTab, ViewMode, WatchState } from '../types'
 import { watchBleService } from '../lib/bleService'
 import { activityRepository } from '../lib/repository'
 
 interface AppState {
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
   activeTab: ActiveTab
   setActiveTab: (tab: ActiveTab) => void
   watch: WatchState
@@ -20,12 +22,14 @@ interface AppState {
 let simulationHeartbeat: number | null = null
 
 export const useAppStore = create<AppState>((set, get) => ({
+  viewMode: 'landing', // Default to landing page on website entry
+  setViewMode: (mode) => set({ viewMode: mode }),
   activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
   isSimulated: true, // Default to simulated mode so all features work immediately without hardware
   lastAlertMessage: null,
   watch: {
-    deviceName: 'PineTime (Virtual)',
+    deviceName: 'WatchOS (Virtual)',
     connectionState: 'connected',
     heartRate: 78,
     stepCount: 7842,
@@ -41,7 +45,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         isSimulated: true,
         watch: {
-          deviceName: 'PineTime (Virtual)',
+          deviceName: 'WatchOS (Virtual)',
           connectionState: 'connected',
           heartRate: 78,
           stepCount: get().watch.stepCount > 0 ? get().watch.stepCount : 7842,
@@ -54,7 +58,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         isSimulated: false,
         watch: {
           ...get().watch,
-          deviceName: 'PineTime',
+          deviceName: 'WatchOS',
           connectionState: 'disconnected'
         }
       })
@@ -77,15 +81,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   connectWatch: async () => {
     set((state) => ({ watch: { ...state.watch, connectionState: 'connecting' } }))
     try {
-      const name = await watchBleService.scanAndConnect((telemetry) => {
-        set((state) => ({
-          watch: {
-            ...state.watch,
-            ...telemetry,
-            lastSyncTime: Date.now()
-          }
-        }))
-      })
+      const name = await watchBleService.scanAndConnect(
+        (telemetry) => {
+          set((state) => ({
+            watch: {
+              ...state.watch,
+              ...telemetry,
+              lastSyncTime: Date.now()
+            }
+          }))
+        },
+        () => {
+          window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
+        }
+      )
       set((state) => ({
         isSimulated: false,
         watch: {
@@ -101,7 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         isSimulated: true,
         watch: {
-          deviceName: 'PineTime (Virtual)',
+          deviceName: 'WatchOS (Virtual)',
           connectionState: 'connected',
           heartRate: 78,
           stepCount: 7842,
@@ -119,7 +128,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       watch: {
         ...state.watch,
         connectionState: 'disconnected',
-        deviceName: 'PineTime'
+        deviceName: 'WatchOS'
       }
     }))
   },

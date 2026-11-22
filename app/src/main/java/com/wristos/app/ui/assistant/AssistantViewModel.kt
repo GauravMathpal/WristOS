@@ -46,6 +46,14 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
 
     val isGeminiConfigured: Boolean = geminiClient.isConfigured
 
+    init {
+        viewModelScope.launch {
+            bleManager.aiTriggerEvent.collect {
+                startVoiceInput()
+            }
+        }
+    }
+
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isLoading.value) return

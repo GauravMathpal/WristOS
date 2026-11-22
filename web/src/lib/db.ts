@@ -6,8 +6,10 @@ export interface TaskRecord {
   description?: string
   dueTime: string
   isCompleted: boolean
-  priority?: string
-  category?: string
+  priority?: string // 'urgent' | 'high' | 'normal' | 'low'
+  category?: string // 'work' | 'study' | 'health' | 'personal'
+  isRecurring?: boolean
+  recurrenceRule?: 'daily' | 'weekly'
   createdAt: number
   updatedAt: number
   deletedAt?: number | null
@@ -28,7 +30,7 @@ export interface FocusSessionRecord {
   id: string
   title: string
   durationMinutes: number
-  mode: string
+  mode: string // 'pomodoro' | 'short_break' | 'long_break' | 'stopwatch'
   completedAt: string
   createdAt: number
   updatedAt: number
@@ -45,6 +47,80 @@ export interface ActivityRecord {
   calories: number
   distanceKm: number
   activeMinutes: number
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface HabitRecord {
+  id: string
+  title: string
+  category: string // 'Health' | 'Focus' | 'Mindset' | 'Routine'
+  targetDaysPerWeek: number
+  streakCount: number
+  completedDates: string[] // List of YYYY-MM-DD strings
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface HydrationRecord {
+  id: string
+  date: string // YYYY-MM-DD
+  amountMl: number
+  goalMl: number
+  logs: { id: string; time: string; amountMl: number }[]
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface MedicationRecord {
+  id: string
+  name: string
+  dosage: string // e.g. "500mg", "1 Tablet"
+  scheduleTime: string // e.g. "09:00 AM"
+  instructions?: string
+  takenDates: string[] // list of YYYY-MM-DD
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface CalendarEventRecord {
+  id: string
+  title: string
+  description?: string
+  date: string // YYYY-MM-DD
+  startTime: string // e.g. "10:00"
+  endTime: string // e.g. "11:30"
+  category: 'class' | 'meeting' | 'deadline' | 'personal'
+  location?: string
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number | null
+  syncStatus: 'synced' | 'pending' | 'failed'
+}
+
+export interface RoutineStep {
+  id: string
+  label: string
+  action: string // 'briefing' | 'tasks' | 'focus' | 'vibrate' | 'health'
+  completed?: boolean
+}
+
+export interface RoutineRecord {
+  id: string
+  name: string
+  type: 'morning' | 'college' | 'evening' | 'custom'
+  description: string
+  steps: RoutineStep[]
+  isActive: boolean
+  lastRunDate?: string // YYYY-MM-DD
   createdAt: number
   updatedAt: number
   deletedAt?: number | null
@@ -75,6 +151,11 @@ const db = new Dexie('WristOSDatabase') as Dexie & {
   memories: EntityTable<MemoryRecord, 'id'>
   focusSessions: EntityTable<FocusSessionRecord, 'id'>
   activityLogs: EntityTable<ActivityRecord, 'id'>
+  habits: EntityTable<HabitRecord, 'id'>
+  hydrationLogs: EntityTable<HydrationRecord, 'id'>
+  medications: EntityTable<MedicationRecord, 'id'>
+  calendarEvents: EntityTable<CalendarEventRecord, 'id'>
+  routines: EntityTable<RoutineRecord, 'id'>
   userSettings: EntityTable<UserSettingsRecord, 'userId'>
   syncMeta: EntityTable<SyncMeta, 'key'>
 }
@@ -110,6 +191,22 @@ db.version(3).stores({
   memories: 'id, tag, fact, createdAt, updatedAt, deletedAt, syncStatus',
   focusSessions: 'id, title, mode, durationMinutes, completedAt, createdAt, updatedAt, deletedAt, syncStatus',
   activityLogs: 'id, date, steps, createdAt, updatedAt, deletedAt, syncStatus',
+  userSettings: 'userId, updatedAt, syncStatus',
+  syncMeta: 'key'
+})
+
+// Version 4: Comprehensive WristOS Ecosystem Expansion
+// Adds Habits, Hydration, Medications, Calendar Events, and Smart Routines
+db.version(4).stores({
+  tasks: 'id, title, isCompleted, createdAt, updatedAt, deletedAt, syncStatus',
+  memories: 'id, tag, fact, createdAt, updatedAt, deletedAt, syncStatus',
+  focusSessions: 'id, title, mode, durationMinutes, completedAt, createdAt, updatedAt, deletedAt, syncStatus',
+  activityLogs: 'id, date, steps, createdAt, updatedAt, deletedAt, syncStatus',
+  habits: 'id, title, category, streakCount, createdAt, updatedAt, deletedAt, syncStatus',
+  hydrationLogs: 'id, date, amountMl, createdAt, updatedAt, deletedAt, syncStatus',
+  medications: 'id, name, scheduleTime, createdAt, updatedAt, deletedAt, syncStatus',
+  calendarEvents: 'id, title, date, category, createdAt, updatedAt, deletedAt, syncStatus',
+  routines: 'id, name, type, isActive, createdAt, updatedAt, deletedAt, syncStatus',
   userSettings: 'userId, updatedAt, syncStatus',
   syncMeta: 'key'
 })

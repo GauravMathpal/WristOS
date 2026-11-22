@@ -60,7 +60,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     { title: 'Focus Session', tab: 'focus' as const, icon: Timer, desc: 'Pomodoro timer & deep work' },
     { title: 'Health & Biometrics', tab: 'health' as const, icon: Activity, desc: 'Activity ring & heart rate trends' },
     { title: 'Knowledge Vault', tab: 'memory' as const, icon: Brain, desc: 'Grounding memory facts' },
-    { title: 'Smartwatch Devices', tab: 'devices' as const, icon: Watch, desc: 'PineTime Bluetooth GATT manager' },
+    { title: 'Smartwatch Devices', tab: 'devices' as const, icon: Watch, desc: 'WatchOS Bluetooth GATT manager' },
     { title: 'Settings & Appearance', tab: 'settings' as const, icon: Sliders, desc: 'Theme colors and cloud sync' },
   ].filter(item => !q || item.title.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q))
 

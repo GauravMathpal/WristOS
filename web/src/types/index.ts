@@ -1,4 +1,5 @@
 export type ActiveTab = 'dashboard' | 'assistant' | 'tasks' | 'focus' | 'health' | 'memory' | 'devices' | 'settings'
+export type ViewMode = 'landing' | 'login' | 'app'
 
 export interface Task {
   id: string

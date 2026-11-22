@@ -69,7 +69,7 @@ export async function queryAssistant(params: AssistantServiceParams): Promise<Pa
     const fact = cleanPrompt.replace(/(remember that|remember|save fact that|save fact|note that|store)/i, "").trim() || cleanPrompt
     let category = "Personal"
     if (lower.includes("health") || lower.includes("water") || lower.includes("bpm") || lower.includes("sleep")) category = "Health"
-    else if (lower.includes("watch") || lower.includes("pinetime") || lower.includes("ble") || lower.includes("hardware")) category = "Hardware"
+    else if (lower.includes("watch") || lower.includes("WatchOS") || lower.includes("ble") || lower.includes("hardware")) category = "Hardware"
     else if (lower.includes("study") || lower.includes("exam") || lower.includes("code") || lower.includes("assignment") || lower.includes("work")) category = "Work"
     reply = `Saved "${fact}" to your Knowledge Vault under #${category}. [ACTION:MEMORY|${category}|${fact}]`
   } else if (lower.includes("vibrate") || lower.includes("alert") || lower.includes("alarm") || lower.includes("buzz") || lower.includes("ping watch")) {

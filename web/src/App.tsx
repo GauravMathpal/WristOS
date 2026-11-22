@@ -20,7 +20,8 @@ import {
   Wifi, 
   WifiOff,
   Heart,
-  MoreHorizontal
+  MoreHorizontal,
+  Globe
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { DashboardScreen } from './components/DashboardScreen'
@@ -32,9 +33,11 @@ import { MemoryScreen } from './components/MemoryScreen'
 import { DevicesScreen } from './components/DevicesScreen'
 import { SettingsScreen } from './components/SettingsScreen'
 import { CommandPalette } from './components/CommandPalette'
+import { LandingPage } from './components/LandingPage'
+import { LoginScreen } from './components/LoginScreen'
 
 export function App() {
-  const { activeTab, setActiveTab, watch, connectWatch, disconnectWatch } = useAppStore()
+  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch } = useAppStore()
   const { mode, setMode } = useThemeStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -42,6 +45,25 @@ export function App() {
   useEffect(() => {
     seedInitialDataIfEmpty()
   }, [])
+
+  // Auto-switch to Assistant tab when watch triggers AI remotely over BLE or simulator
+  useEffect(() => {
+    const handleRemoteTrigger = () => {
+      setViewMode('app')
+      setActiveTab('assistant')
+    }
+    window.addEventListener('wristos-ai-trigger', handleRemoteTrigger)
+    return () => window.removeEventListener('wristos-ai-trigger', handleRemoteTrigger)
+  }, [setActiveTab, setViewMode])
+
+  // View routing between Landing Page, Login/Pairing Screen, and Companion Application
+  if (viewMode === 'landing') {
+    return <LandingPage />
+  }
+
+  if (viewMode === 'login') {
+    return <LoginScreen />
+  }
 
   // Desktop navigation items (all 8 application sections)
   const navItems = [
@@ -129,8 +151,9 @@ export function App() {
           {/* Brand header & Collapse Toggle */}
           <div className="flex items-center justify-between px-1">
             <div 
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => setViewMode('landing')}
               className="flex items-center gap-3 cursor-pointer group"
+              title="Return to WristOS Portal Homepage"
             >
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-500 via-fuchsia-500 to-pink-500 p-[1.5px] shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform shrink-0">
                 <div className="w-full h-full bg-[#0d0918] rounded-[14px] flex items-center justify-center">
@@ -141,7 +164,7 @@ export function App() {
               {!sidebarCollapsed && (
                 <div className="overflow-hidden">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="text-sm font-extrabold tracking-tight text-white">WristOS</h1>
+                    <h1 className="text-sm font-extrabold tracking-tight text-white group-hover:text-purple-300 transition-colors">WristOS</h1>
                     <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_8px_rgba(168,85,247,0.3)]">v2.0</span>
                   </div>
                   <p className="text-[10px] text-purple-300/80 truncate font-medium">Personal Intelligence</p>
@@ -212,7 +235,7 @@ export function App() {
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' : 'bg-slate-600'}`} />
-                <span className="text-xs font-bold text-white tracking-tight">{watch.deviceName || 'PineTime'}</span>
+                <span className="text-xs font-bold text-white tracking-tight">{watch.deviceName || 'WatchOS'}</span>
               </div>
               {isConnected ? (
                 <Wifi className="w-3.5 h-3.5 text-emerald-400" />
@@ -282,6 +305,17 @@ export function App() {
                 {watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}
               </span>
             </div>
+
+            {/* Return to Landing Portal Button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode('landing')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#140e29]/70 hover:bg-purple-900/30 border border-purple-500/20 text-xs font-semibold text-purple-300 hover:text-white transition-all shadow-inner"
+              title="Return to WristOS Portal Homepage"
+            >
+              <Globe className="w-3.5 h-3.5 text-pink-400" />
+              <span className="hidden sm:inline">Portal</span>
+            </motion.button>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">

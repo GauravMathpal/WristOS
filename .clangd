@@ -1,0 +1,11 @@
+CompileFlags:
+  CompilationDatabase: .
+  Add:
+    - -I/Users/gauravm/Projects/WristOS/firmware/src
+    - -I/Users/gauravm/Projects/WristOS/firmware/src/libs
+    - -I/Users/gauravm/Projects/WristOS/firmware/src/libs/lvgl
+    - -I/Users/gauravm/Projects/WristOS/simulator/sim
+    - -I/Users/gauravm/Projects/WristOS/simulator/build
+    - -isystem/opt/homebrew/include
+    - -isystem/opt/homebrew/include/SDL2
+    - -std=c++20

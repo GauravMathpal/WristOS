@@ -16,7 +16,10 @@ export const INFINITIME_SERVICES = {
   ANS_ALERT: '00002a46-0000-1000-8000-00805f9b34fb',
 
   MOTION: '00000001-0002-0000-0000-000000000000', // Motion / Steps
-  MOTION_STEPS: '00000003-0002-0000-0000-000000000000'
+  MOTION_STEPS: '00000003-0002-0000-0000-000000000000',
+
+  EVENT: '00000000-78fc-48fe-8e23-433b3a1942d0', // WristOS Watch Event Service
+  EVENT_TRIGGER: '00000001-78fc-48fe-8e23-433b3a1942d0'
 }
 
 export interface WatchTelemetry {
@@ -37,7 +40,7 @@ class WatchBleService {
     this.isInitialized = true
   }
 
-  async scanAndConnect(onTelemetry: (t: Partial<WatchTelemetry>) => void): Promise<string> {
+  async scanAndConnect(onTelemetry: (t: Partial<WatchTelemetry>) => void, onAiTrigger?: () => void): Promise<string> {
     await this.initialize()
 
     if (!Capacitor.isNativePlatform()) {
@@ -47,13 +50,14 @@ class WatchBleService {
 
     // Android Native BLE Scan
     const device: BleDevice = await BleClient.requestDevice({
-      namePrefix: 'PineTime',
+      namePrefix: 'WristOS',
       optionalServices: [
         INFINITIME_SERVICES.CTS,
         INFINITIME_SERVICES.HRS,
         INFINITIME_SERVICES.BAS,
         INFINITIME_SERVICES.ANS,
-        INFINITIME_SERVICES.MOTION
+        INFINITIME_SERVICES.MOTION,
+        INFINITIME_SERVICES.EVENT
       ]
     })
 
@@ -108,7 +112,24 @@ class WatchBleService {
       console.warn('Motion steps notification start failed:', e)
     }
 
-    return device.name || 'PineTime (BLE)'
+    // 5. Subscribe to Watch AI Mode Trigger Events
+    try {
+      await BleClient.startNotifications(
+        this.deviceId,
+        INFINITIME_SERVICES.EVENT,
+        INFINITIME_SERVICES.EVENT_TRIGGER,
+        (val) => {
+          const raw = dataViewToNumbers(val)
+          if (raw.length > 0 && raw[0] === 0xAA) {
+            onAiTrigger?.()
+          }
+        }
+      )
+    } catch (e) {
+      console.warn('Watch AI event notification start failed:', e)
+    }
+
+    return device.name || 'WatchOS (BLE)'
   }
 
   async sendAlert(message: string): Promise<void> {
@@ -117,7 +138,7 @@ class WatchBleService {
       await Haptics.impact({ style: ImpactStyle.Heavy })
     } catch (e) {}
 
-    // Dispatch BLE Alert Notification to PineTime (ANS 0x1811)
+    // Dispatch BLE Alert Notification to WatchOS (ANS 0x1811)
     if (this.deviceId && Capacitor.isNativePlatform()) {
       try {
         const encoder = new TextEncoder()
@@ -185,7 +206,7 @@ class WatchBleService {
           stepCount: 7120,
           batteryLevel: 86
         })
-        resolve('PineTime (BLE Simulator)')
+        resolve('WatchOS (BLE Simulator)')
       }, 1000)
     })
   }

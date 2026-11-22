@@ -12,6 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -26,6 +29,9 @@ class WatchBleManager(private val context: Context) {
     private val _watchData = MutableStateFlow(WatchData())
     val watchData: StateFlow<WatchData> = _watchData.asStateFlow()
 
+    private val _aiTriggerEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val aiTriggerEvent: SharedFlow<Unit> = _aiTriggerEvent.asSharedFlow()
+
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
 
@@ -33,7 +39,9 @@ class WatchBleManager(private val context: Context) {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             result?.device?.let { device ->
                 val name = device.name ?: ""
-                if (name.contains("PineTime", ignoreCase = true) || name.contains("InfiniTime", ignoreCase = true)) {
+                if (name.contains("WristOS", ignoreCase = true) ||
+                    name.contains("PineTime", ignoreCase = true) ||
+                    name.contains("InfiniTime", ignoreCase = true)) {
                     stopScan()
                     connectToDevice(device)
                 }
@@ -69,6 +77,7 @@ class WatchBleManager(private val context: Context) {
                 syncCurrentTime(gatt)
                 enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
                 enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
+                enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
                 readBattery(gatt)
             }
         }
@@ -194,16 +203,22 @@ class WatchBleManager(private val context: Context) {
                     _watchData.value = _watchData.value.copy(batteryLevel = bytes[0].toInt() and 0xFF)
                 }
             }
+            BleConstants.CHAR_MUSIC_EVENT -> {
+                if (bytes.isNotEmpty() && (bytes[0].toInt() and 0xFF) == 0xAA) {
+                    _aiTriggerEvent.tryEmit(Unit)
+                }
+            }
         }
     }
 
-    fun sendAlertNotification(message: String) {
+    fun sendAlertNotification(title: String, message: String = "") {
         val gatt = bluetoothGatt ?: return
         val ans = gatt.getService(BleConstants.SERVICE_ANS)
         val char = ans?.getCharacteristic(BleConstants.CHAR_NEW_ALERT) ?: return
 
-        val msgBytes = message.toByteArray(Charsets.UTF_8).take(18)
-        val payload = byteArrayOf(0x05, 0x01) + msgBytes.toByteArray()
+        val titleBytes = title.toByteArray(Charsets.UTF_8).take(32).toByteArray()
+        val msgBytes = (if (message.isNotEmpty()) message else title).toByteArray(Charsets.UTF_8).take(64).toByteArray()
+        val payload = byteArrayOf(0x05, 0x01, 0x00) + titleBytes + byteArrayOf(0x00) + msgBytes
         char.value = payload
         gatt.writeCharacteristic(char)
     }
