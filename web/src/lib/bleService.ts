@@ -150,23 +150,56 @@ class WatchBleService {
     onAiTrigger?: () => void
   ): Promise<string> {
     const navBle = (navigator as any).bluetooth
-    const device = await navBle.requestDevice({
-      filters: [
-        { namePrefix: 'WristOS' },
-        { namePrefix: 'PineTime' },
-        { namePrefix: 'InfiniTime' }
-      ],
-      optionalServices: [
-        INFINITIME_SERVICES.CTS,
-        INFINITIME_SERVICES.HRS,
-        INFINITIME_SERVICES.BAS,
-        INFINITIME_SERVICES.ANS,
-        INFINITIME_SERVICES.EVENT,
-        INFINITIME_SERVICES.MOTION
-      ]
-    })
+    let device: any = null
+
+    try {
+      device = await navBle.requestDevice({
+        filters: [
+          { namePrefix: 'WristOS' },
+          { namePrefix: 'PineTime' },
+          { namePrefix: 'InfiniTime' },
+          { namePrefix: 'wristos' },
+          { namePrefix: 'pinetime' },
+          { namePrefix: 'infinitime' }
+        ],
+        optionalServices: [
+          INFINITIME_SERVICES.CTS,
+          INFINITIME_SERVICES.HRS,
+          INFINITIME_SERVICES.BAS,
+          INFINITIME_SERVICES.ANS,
+          INFINITIME_SERVICES.EVENT,
+          INFINITIME_SERVICES.MOTION
+        ]
+      })
+    } catch (filterErr: any) {
+      if (filterErr.name === 'NotFoundError') {
+        throw filterErr
+      }
+      // Fallback: prompt with acceptAllDevices if filters aren't matched
+      device = await navBle.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          INFINITIME_SERVICES.CTS,
+          INFINITIME_SERVICES.HRS,
+          INFINITIME_SERVICES.BAS,
+          INFINITIME_SERVICES.ANS,
+          INFINITIME_SERVICES.EVENT,
+          INFINITIME_SERVICES.MOTION
+        ]
+      })
+    }
 
     this.webDevice = device
+
+    // Auto-handle unexpected disconnects
+    device.addEventListener('gattserverdisconnected', () => {
+      console.log('WatchOS disconnected')
+      if (this.webDevice) {
+        this.webDevice = null
+        this.webServer = null
+      }
+    })
+
     const server = await device.gatt.connect()
     this.webServer = server
 
