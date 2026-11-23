@@ -36,7 +36,18 @@ fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isListening by viewModel.voiceManager.isListening.collectAsState()
+    val speechText by viewModel.voiceManager.speechText.collectAsState()
+    val voiceError by viewModel.voiceManager.errorMessage.collectAsState()
     val ttsEnabled by viewModel.voiceManager.ttsEnabled.collectAsState()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startVoiceInput()
+        }
+    }
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -140,27 +151,88 @@ fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                color = DarkSurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CoralWarning),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(CoralWarning, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Listening to voice input... speak into phone",
+                            color = CoralWarning,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (speechText.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "\"$speechText\"",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        // Voice Error Alert Banner
+        AnimatedVisibility(
+            visible = voiceError != null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
-                color = CoralWarning.copy(alpha = 0.15f),
+                color = DarkSurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CoralWarning),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(CoralWarning, CircleShape)
+                    Text(
+                        text = voiceError ?: "",
+                        color = CoralWarning,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Listening to voice input... speak now",
-                        color = CoralWarning,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    TextButton(
+                        onClick = {
+                            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.RECORD_AUDIO
+                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.startVoiceInput()
+                            } else {
+                                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
+                    ) {
+                        Text("Retry", color = CyanPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -181,8 +253,19 @@ fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
                 // Mic Button
                 IconButton(
                     onClick = {
-                        if (isListening) viewModel.voiceManager.stopListening()
-                        else viewModel.startVoiceInput()
+                        if (isListening) {
+                            viewModel.voiceManager.stopListening()
+                        } else {
+                            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.RECORD_AUDIO
+                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.startVoiceInput()
+                            } else {
+                                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
                     },
                     modifier = Modifier
                         .size(46.dp)

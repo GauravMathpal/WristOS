@@ -28,6 +28,9 @@ class VoiceManager(context: Context) {
     private val _speechText = MutableStateFlow("")
     val speechText: StateFlow<String> = _speechText.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
 
@@ -63,11 +66,26 @@ class VoiceManager(context: Context) {
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         mainHandler.post {
             try {
-                if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
-                    android.util.Log.w("VoiceManager", "Speech recognition service not available on device")
+                // Check microphone permission before calling SpeechRecognizer
+                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                        appContext,
+                        android.Manifest.permission.RECORD_AUDIO
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    _errorMessage.value = "Microphone permission required. Please allow audio access."
+                    _isListening.value = false
                     return@post
                 }
 
+                if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
+                    android.util.Log.w("VoiceManager", "Speech recognition service not available on device")
+                    _errorMessage.value = "Speech recognition is not available on this device."
+                    _isListening.value = false
+                    return@post
+                }
+
+                _errorMessage.value = null
+                _speechText.value = ""
                 stopSpeaking()
                 speechRecognizer?.destroy()
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
@@ -75,12 +93,14 @@ class VoiceManager(context: Context) {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
                         _isListening.value = true
+                        _errorMessage.value = null
                     }
 
                     override fun onBeginningOfSpeech() {}
@@ -93,6 +113,19 @@ class VoiceManager(context: Context) {
 
                     override fun onError(error: Int) {
                         android.util.Log.w("VoiceManager", "SpeechRecognizer error: $error")
+                        val errorDesc = when (error) {
+                            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+                            SpeechRecognizer.ERROR_CLIENT -> "Speech recognizer client error"
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission not granted"
+                            SpeechRecognizer.ERROR_NETWORK -> "Network connection error for speech"
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+                            SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized. Please try again."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy. Please wait a moment."
+                            SpeechRecognizer.ERROR_SERVER -> "Google speech server error"
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input detected. Tap mic to speak."
+                            else -> "Speech recognition error ($error)"
+                        }
+                        _errorMessage.value = errorDesc
                         _isListening.value = false
                     }
 
@@ -106,13 +139,20 @@ class VoiceManager(context: Context) {
                         }
                     }
 
-                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            _speechText.value = matches[0]
+                        }
+                    }
+
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
 
                 speechRecognizer?.startListening(intent)
             } catch (e: Exception) {
                 android.util.Log.e("VoiceManager", "Failed to start speech recognition", e)
+                _errorMessage.value = "Voice input error: ${e.localizedMessage ?: "Unknown"}"
                 _isListening.value = false
             }
         }

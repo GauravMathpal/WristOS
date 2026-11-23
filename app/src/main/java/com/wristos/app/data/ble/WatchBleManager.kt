@@ -5,6 +5,7 @@ import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -254,8 +255,49 @@ class WatchBleManager(private val context: Context) {
             BleConstants.CHAR_MUSIC_EVENT -> {
                 if (bytes.isNotEmpty() && (bytes[0].toInt() and 0xFF) == 0xAA) {
                     _aiTriggerEvent.tryEmit(Unit)
+                    wakePhoneForAi()
                 }
             }
+        }
+    }
+
+    fun triggerAiManually() {
+        _aiTriggerEvent.tryEmit(Unit)
+    }
+
+    private fun wakePhoneForAi() {
+        try {
+            // 1. Wake screen if device is locked or screen is off
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            val wakeLock = powerManager?.newWakeLock(
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "wristos:ai_wake"
+            )
+            wakeLock?.acquire(3000)
+
+            // 2. Play haptic buzz so user feels the phone is awake
+            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(150, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(150)
+            }
+
+            // 3. Bring MainActivity to foreground
+            val intent = Intent(context, com.wristos.app.MainActivity::class.java).apply {
+                action = "com.wristos.app.TRIGGER_AI"
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("WatchBleManager", "Could not wake phone for AI trigger", e)
         }
     }
 
