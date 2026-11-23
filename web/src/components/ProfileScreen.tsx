@@ -17,7 +17,7 @@ import {
   UserPlus, 
   ChevronLeft
 } from 'lucide-react'
-import { useAppStore } from '../stores/useAppStore'
+import { useAppStore, DEFAULT_USERS } from '../stores/useAppStore'
 
 export function ProfileScreen() {
   const { 
@@ -32,26 +32,29 @@ export function ProfileScreen() {
     sendWatchAlert
   } = useAppStore()
 
+  // Safe fallback to first profile if viewing profile settings
+  const current = currentUser || DEFAULT_USERS[0]
+
   const [isEditing, setIsEditing] = useState(false)
-  const [editName, setEditName] = useState(currentUser.name)
-  const [editEmail, setEditEmail] = useState(currentUser.email)
-  const [editRole, setEditRole] = useState(currentUser.role)
-  const [editBio, setEditBio] = useState(currentUser.bio || '')
-  const [editStepGoal, setEditStepGoal] = useState(currentUser.dailyStepGoal)
+  const [editName, setEditName] = useState(current.name)
+  const [editEmail, setEditEmail] = useState(current.email)
+  const [editRole, setEditRole] = useState(current.role)
+  const [editBio, setEditBio] = useState(current.bio || '')
+  const [editStepGoal, setEditStepGoal] = useState(current.dailyStepGoal)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
   const isConnected = watch.connectionState === 'connected'
   const displaySteps = watch.stepCount ?? 0
-  const stepProgress = Math.min(100, Math.round((displaySteps / (currentUser.dailyStepGoal || 10000)) * 100))
+  const stepProgress = Math.min(100, Math.round((displaySteps / (current.dailyStepGoal || 10000)) * 100))
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault()
     updateCurrentUser({
-      name: editName.trim() || currentUser.name,
-      email: editEmail.trim() || currentUser.email,
-      role: editRole.trim() || currentUser.role,
-      bio: editBio.trim() || currentUser.bio,
-      dailyStepGoal: Number(editStepGoal) || currentUser.dailyStepGoal
+      name: editName.trim() || current.name,
+      email: editEmail.trim() || current.email,
+      role: editRole.trim() || current.role,
+      bio: editBio.trim() || current.bio,
+      dailyStepGoal: Number(editStepGoal) || current.dailyStepGoal
     })
     setIsEditing(false)
     setSaveSuccess(true)
@@ -114,21 +117,21 @@ export function ProfileScreen() {
         className="relative overflow-hidden rounded-3xl bg-[#110c22] border border-white/[0.08] shadow-2xl p-6 sm:p-8"
       >
         {/* Ambient Gradient Backdrop */}
-        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-r ${currentUser.avatarColor} opacity-30 blur-2xl pointer-events-none`} />
+        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-r ${current.avatarColor} opacity-30 blur-2xl pointer-events-none`} />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="flex items-center gap-4 sm:gap-6">
             {/* Big User Avatar Orb */}
-            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-tr ${currentUser.avatarColor} p-1 shadow-2xl ring-2 ring-white/20 shrink-0`}>
+            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-tr ${current.avatarColor} p-1 shadow-2xl ring-2 ring-white/20 shrink-0`}>
               <div className="w-full h-full rounded-[22px] bg-[#0c0819] flex items-center justify-center text-3xl font-black text-white font-mono shadow-inner">
-                {currentUser.name.charAt(0)}
+                {current.name.charAt(0)}
               </div>
             </div>
 
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  {currentUser.name}
+                  {current.name}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-cyan-400" />
@@ -137,10 +140,10 @@ export function ProfileScreen() {
               </div>
               <p className="text-xs sm:text-sm text-purple-300/80 font-medium flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-400" />
-                <span>{currentUser.email}</span>
+                <span>{current.email}</span>
               </p>
               <p className="text-[11px] text-slate-400 font-mono">
-                {currentUser.role}
+                {current.role}
               </p>
             </div>
           </div>
@@ -149,7 +152,7 @@ export function ProfileScreen() {
           <div className="flex items-center gap-3 self-start sm:self-center bg-[#17102e]/80 border border-purple-500/20 px-4 py-2.5 rounded-2xl shadow-inner">
             <div className="text-center px-2">
               <p className="text-[10px] text-slate-400 font-medium">Daily Goal</p>
-              <p className="text-sm font-black text-white font-mono">{currentUser.dailyStepGoal.toLocaleString()}</p>
+              <p className="text-sm font-black text-white font-mono">{current.dailyStepGoal.toLocaleString()}</p>
             </div>
             <div className="h-6 w-px bg-white/10" />
             <div className="text-center px-2">
@@ -161,9 +164,9 @@ export function ProfileScreen() {
           </div>
         </div>
 
-        {currentUser.bio && (
+        {current.bio && (
           <p className="relative z-10 text-xs text-slate-300/90 leading-relaxed mt-4 pt-4 border-t border-white/[0.06]">
-            "{currentUser.bio}"
+            "{current.bio}"
           </p>
         )}
       </motion.div>
@@ -281,7 +284,7 @@ export function ProfileScreen() {
                 <span>Today's Steps</span>
               </span>
               <span className="text-white font-mono font-bold">
-                {displaySteps.toLocaleString()} / {currentUser.dailyStepGoal.toLocaleString()}
+                {displaySteps.toLocaleString()} / {current.dailyStepGoal.toLocaleString()}
               </span>
             </div>
             <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-white/[0.06]">
@@ -301,7 +304,7 @@ export function ProfileScreen() {
                 <span>Resting BPM</span>
               </div>
               <p className="text-lg font-black text-white font-mono">
-                {watch.heartRate > 0 ? watch.heartRate : currentUser.targetHeartRate} <span className="text-xs text-slate-400 font-normal">bpm</span>
+                {watch.heartRate > 0 ? watch.heartRate : current.targetHeartRate} <span className="text-xs text-slate-400 font-normal">bpm</span>
               </p>
             </div>
 
@@ -331,7 +334,7 @@ export function ProfileScreen() {
 
           <div className="p-4 rounded-2xl bg-[#0e0a1f] border border-white/[0.05] flex items-center justify-between">
             <div className="space-y-0.5">
-              <p className="text-xs font-extrabold text-white">{currentUser.pairedWatchName}</p>
+              <p className="text-xs font-extrabold text-white">{current.pairedWatchName}</p>
               <p className="text-[11px] text-slate-400 font-mono">
                 Nordic nRF52832 • InfiniTime 1.16.0
               </p>
@@ -342,7 +345,7 @@ export function ProfileScreen() {
 
             <button
               onClick={() => {
-                sendWatchAlert(`Ping from ${currentUser.name}`)
+                sendWatchAlert(`Ping from ${current.name}`)
               }}
               className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all flex items-center gap-1.5"
             >
@@ -389,7 +392,7 @@ export function ProfileScreen() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
           {allUsers.map((u) => {
-            const isCurrent = u.id === currentUser.id
+            const isCurrent = currentUser ? u.id === currentUser.id : false
             return (
               <motion.div
                 key={u.id}

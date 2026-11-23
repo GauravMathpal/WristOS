@@ -22,7 +22,8 @@ import {
   Heart,
   MoreHorizontal,
   Globe,
-  User
+  User,
+  LogOut
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { DashboardScreen } from './components/DashboardScreen'
@@ -39,7 +40,7 @@ import { LandingPage } from './components/LandingPage'
 import { LoginScreen } from './components/LoginScreen'
 
 export function App() {
-  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser } = useAppStore()
+  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser, logoutUser } = useAppStore()
   const { mode, setMode } = useThemeStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -64,6 +65,11 @@ export function App() {
   }
 
   if (viewMode === 'login') {
+    return <LoginScreen />
+  }
+
+  // Auth Guard: Never permit unauthenticated users into the companion application dashboard
+  if (!currentUser) {
     return <LoginScreen />
   }
 
@@ -343,26 +349,47 @@ export function App() {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#ec4899]" />
             </motion.button>
 
+            {/* Quick Landing Page link */}
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={() => setViewMode('landing')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white transition-all"
+              title="Return to Product Showcase"
+            >
+              <Globe className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Showcase</span>
+            </motion.button>
+
             {/* Profile Avatar / User Chip */}
             <div 
               onClick={() => setActiveTab('profile')}
               className="flex items-center gap-2 px-2 py-1 rounded-2xl hover:bg-white/[0.05] border border-transparent hover:border-purple-500/20 cursor-pointer transition-all group"
-              title={`View ${currentUser.name}'s Profile`}
+              title={`View ${currentUser?.name || 'User'}'s Profile`}
             >
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentUser.avatarColor} p-[1.5px] shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform`}>
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentUser?.avatarColor || 'from-purple-500 to-pink-500'} p-[1.5px] shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform`}>
                 <div className="w-full h-full rounded-full bg-[#0a0715] flex items-center justify-center font-bold text-xs text-white">
-                  {currentUser.name.charAt(0)}
+                  {(currentUser?.name || 'U').charAt(0)}
                 </div>
               </div>
               <div className="hidden lg:block text-left pr-1">
                 <p className="text-xs font-bold text-white leading-tight group-hover:text-pink-200 transition-colors">
-                  {currentUser.name.split(' ')[0]}
+                  {(currentUser?.name || 'User').split(' ')[0]}
                 </p>
                 <p className="text-[10px] text-purple-300/70 font-mono leading-none">
-                  {currentUser.role.split(' ')[0]}
+                  {(currentUser?.role || 'Member').split(' ')[0]}
                 </p>
               </div>
             </div>
+
+            {/* Quick Sign Out Button */}
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={logoutUser}
+              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all"
+              title="Sign Out of Watch Account"
+            >
+              <LogOut className="w-4 h-4" />
+            </motion.button>
           </div>
         </header>
 

@@ -54,8 +54,8 @@ const loadSavedUsers = (): UserProfile[] => {
   return DEFAULT_USERS
 }
 
-const loadSavedCurrentUser = (users: UserProfile[]): UserProfile => {
-  if (typeof window === 'undefined') return users[0]
+const loadSavedCurrentUser = (users: UserProfile[]): UserProfile | null => {
+  if (typeof window === 'undefined') return null
   try {
     const currentId = localStorage.getItem('wristos_active_user_id')
     if (currentId) {
@@ -63,7 +63,7 @@ const loadSavedCurrentUser = (users: UserProfile[]): UserProfile => {
       if (found) return found
     }
   } catch (_) {}
-  return users[0]
+  return null
 }
 
 const initialUsers = loadSavedUsers()
@@ -74,7 +74,8 @@ interface AppState {
   setViewMode: (mode: ViewMode) => void
   activeTab: ActiveTab
   setActiveTab: (tab: ActiveTab) => void
-  currentUser: UserProfile
+  currentUser: UserProfile | null
+  isAuthenticated: boolean
   allUsers: UserProfile[]
   loginUser: (user: UserProfile) => void
   logoutUser: () => void
@@ -101,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
   currentUser: initialCurrentUser,
+  isAuthenticated: Boolean(initialCurrentUser),
   allUsers: initialUsers,
 
   loginUser: (user: UserProfile) => {
@@ -109,8 +111,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({
       currentUser: user,
+      isAuthenticated: true,
       viewMode: 'app',
-      activeTab: 'profile'
+      activeTab: 'dashboard'
     })
   },
 
@@ -119,7 +122,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       localStorage.removeItem('wristos_active_user_id')
     }
     set({
-      viewMode: 'login'
+      currentUser: null,
+      isAuthenticated: false,
+      viewMode: 'landing',
+      activeTab: 'dashboard'
     })
   },
 
@@ -137,14 +143,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       allUsers: updatedUsers,
       currentUser: user,
+      isAuthenticated: true,
       viewMode: 'app',
-      activeTab: 'profile'
+      activeTab: 'dashboard'
     })
     return user
   },
 
   updateCurrentUser: (updates) => {
-    const updated = { ...get().currentUser, ...updates }
+    const current = get().currentUser
+    if (!current) return
+    const updated = { ...current, ...updates }
     const updatedUsers = get().allUsers.map(u => u.id === updated.id ? updated : u)
     if (typeof window !== 'undefined') {
       localStorage.setItem('wristos_users_list', JSON.stringify(updatedUsers))
@@ -163,7 +172,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       set({
         currentUser: target,
-        activeTab: 'profile'
+        isAuthenticated: true,
+        activeTab: 'dashboard'
       })
     }
   },

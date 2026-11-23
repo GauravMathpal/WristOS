@@ -264,7 +264,7 @@ export function DashboardScreen() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
-              {greetingText},<br />{currentUser.name.split(' ')[0]}
+              {greetingText},<br />{(currentUser?.name || 'User').split(' ')[0]}
             </h1>
           </motion.div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium flex items-center gap-1.5">
@@ -292,11 +292,11 @@ export function DashboardScreen() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setActiveTab('profile')}
-            className={`w-10 h-10 rounded-full bg-gradient-to-tr ${currentUser.avatarColor || 'from-purple-600/40 via-fuchsia-600/30 to-pink-600/30'} border border-white/20 p-[2px] cursor-pointer shadow-md overflow-hidden flex items-center justify-center`}
-            title={`${currentUser.name}'s Profile`}
+            className={`w-10 h-10 rounded-full bg-gradient-to-tr ${currentUser?.avatarColor || 'from-purple-600/40 via-fuchsia-600/30 to-pink-600/30'} border border-white/20 p-[2px] cursor-pointer shadow-md overflow-hidden flex items-center justify-center`}
+            title={`${currentUser?.name || 'User'}'s Profile`}
           >
             <div className="w-full h-full rounded-full bg-[#18112b] flex items-center justify-center text-white font-bold text-xs">
-              {currentUser.name.charAt(0)}
+              {(currentUser?.name || 'U').charAt(0)}
             </div>
           </motion.div>
         </div>

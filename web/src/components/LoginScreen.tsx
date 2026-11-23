@@ -22,7 +22,8 @@ export function LoginScreen() {
     loginUser, 
     registerUser, 
     watch, 
-    connectWatch 
+    connectWatch,
+    currentUser 
   } = useAppStore()
 
   const [authMode, setAuthMode] = useState<'switch' | 'signin' | 'signup' | 'pair'>('switch')
@@ -168,12 +169,42 @@ export function LoginScreen() {
               {authMode === 'pair' && 'Pair Your Smartwatch'}
             </h1>
             <p className="text-xs text-slate-400 font-medium">
-              {authMode === 'switch' && 'Each user has a personalized profile, custom health goals, and AI memory.'}
+              {authMode === 'switch' && 'Each user has a personalized profile, custom health goals, and private watch metrics.'}
               {authMode === 'signin' && 'Enter your email to load your personalized dashboard.'}
               {authMode === 'signup' && 'Set up your own dedicated profile and sync with WatchOS.'}
               {authMode === 'pair' && 'Link physical Bluetooth hardware directly to your user account.'}
             </p>
           </div>
+
+          {/* Active Account Quick Continue Banner if already signed in */}
+          {currentUser && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/30 to-pink-950/30 border border-purple-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${currentUser.avatarColor} p-0.5 shadow-md`}>
+                  <div className="w-full h-full rounded-[10px] bg-[#0c0819] flex items-center justify-center font-bold text-xs text-white">
+                    {currentUser.name.charAt(0)}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <p className="text-xs font-bold text-white">Signed in as {currentUser.name}</p>
+                  </div>
+                  <p className="text-[10px] text-purple-300/80 font-mono">{currentUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setViewMode('app')
+                  setActiveTab('dashboard')
+                }}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white text-xs font-bold shadow-md shadow-purple-600/30 transition-all flex items-center gap-1"
+              >
+                <span>Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Mode Switcher Pills */}
           <div className="grid grid-cols-4 p-1 rounded-2xl bg-[#090614] border border-white/[0.06] text-xs font-semibold">

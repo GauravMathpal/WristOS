@@ -31,14 +31,25 @@ import {
   Smartphone,
   Download,
   Layers,
-  Wifi
+  Wifi,
+  User,
+  LogOut
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 
 export function LandingPage() {
-  const { setViewMode, setActiveTab, currentUser, watch, connectWatch } = useAppStore()
+  const { setViewMode, setActiveTab, currentUser, watch, connectWatch, logoutUser } = useAppStore()
 
   const isConnected = watch.connectionState === 'connected'
+
+  const handleOpenCompanion = (tab: any = 'dashboard') => {
+    if (currentUser) {
+      setViewMode('app')
+      setActiveTab(tab)
+    } else {
+      setViewMode('login')
+    }
+  }
 
   // ============================================================
   // 10 Native Firmware Screens (Built with LVGL 7 & FreeRTOS)
@@ -322,24 +333,59 @@ export function LandingPage() {
               <span>{isConnected ? 'Watch Connected' : 'Pair BLE'}</span>
             </button>
 
-            <button
-              onClick={() => setViewMode('login')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-medium text-purple-200 hover:border-purple-400 hover:text-white transition-all"
-            >
-              <div className={`w-4 h-4 rounded-full bg-gradient-to-tr ${currentUser.avatarColor}`} />
-              <span className="hidden sm:inline font-mono">{currentUser.name.split(' ')[0]}</span>
-            </button>
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setViewMode('app')
+                    setActiveTab('profile')
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-medium text-purple-200 hover:border-purple-400 hover:text-white transition-all"
+                  title="Your Personal Profile"
+                >
+                  <div className={`w-4 h-4 rounded-full bg-gradient-to-tr ${currentUser.avatarColor}`} />
+                  <span className="hidden sm:inline font-mono">{currentUser.name.split(' ')[0]}</span>
+                </button>
 
-            <button
-              onClick={() => {
-                setViewMode('app')
-                setActiveTab('dashboard')
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
-            >
-              <Zap className="w-3.5 h-3.5 fill-white" />
-              <span>Launch App</span>
-            </button>
+                <button
+                  onClick={() => {
+                    setViewMode('app')
+                    setActiveTab('dashboard')
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-white" />
+                  <span>Dashboard</span>
+                </button>
+
+                <button
+                  onClick={logoutUser}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 text-xs font-semibold transition-all"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <button
+                  onClick={() => setViewMode('login')}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-bold text-purple-200 hover:border-purple-400 hover:text-white transition-all shadow-md"
+                >
+                  <User className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Sign In</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('login')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-white" />
+                  <span>Get Started</span>
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
@@ -371,19 +417,22 @@ export function LandingPage() {
           {/* Quick CTA Actions */}
           <div className="flex flex-wrap items-center justify-center gap-4 pt-3">
             <button
-              onClick={() => {
-                setViewMode('app')
-                setActiveTab('dashboard')
-              }}
+              onClick={() => handleOpenCompanion('dashboard')}
               className="flex items-center gap-2.5 px-7 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
             >
               <Zap className="w-4 h-4 fill-white" />
-              <span>Launch Companion Dashboard</span>
+              <span>{currentUser ? 'Open My Dashboard' : 'Sign In to Dashboard'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <button
-              onClick={() => isConnected ? setViewMode('app') : connectWatch()}
+              onClick={() => {
+                if (currentUser) {
+                  isConnected ? setViewMode('app') : connectWatch()
+                } else {
+                  setViewMode('login')
+                }
+              }}
               className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border border-purple-500/40 bg-[#16102c]/80 hover:bg-purple-900/40 text-white font-bold text-sm transition-all hover:scale-105 shadow-md shadow-purple-950/40"
             >
               <Bluetooth className="w-4 h-4 text-cyan-400" />
@@ -589,13 +638,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('assistant')
-                }}
+                onClick={() => handleOpenCompanion('assistant')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Assistant Screen</span>
+                <span>{currentUser ? 'Open Assistant Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -679,13 +725,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('dashboard')
-                }}
+                onClick={() => handleOpenCompanion('dashboard')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Home Screen</span>
+                <span>{currentUser ? 'Open Home Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -794,13 +837,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('memory')
-                }}
+                onClick={() => handleOpenCompanion('memory')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Memory Vault</span>
+                <span>{currentUser ? 'Open Memory Vault' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -913,13 +953,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('tasks')
-                }}
+                onClick={() => handleOpenCompanion('tasks')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Tasks Screen</span>
+                <span>{currentUser ? 'Open Tasks Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1011,13 +1048,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('health')
-                }}
+                onClick={() => handleOpenCompanion('health')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Health Screen</span>
+                <span>{currentUser ? 'Open Health Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1107,13 +1141,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('focus')
-                }}
+                onClick={() => handleOpenCompanion('focus')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Focus Screen</span>
+                <span>{currentUser ? 'Open Focus Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1226,13 +1257,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('health')
-                }}
+                onClick={() => handleOpenCompanion('health')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Wellness Screen</span>
+                <span>{currentUser ? 'Open Wellness Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1324,13 +1352,10 @@ export function LandingPage() {
               </div>
 
               <button
-                onClick={() => {
-                  setViewMode('app')
-                  setActiveTab('devices')
-                }}
+                onClick={() => handleOpenCompanion('devices')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 hover:scale-105 transition-all"
               >
-                <span>Launch Devices Screen</span>
+                <span>{currentUser ? 'Open Devices Screen' : 'Sign In to Access'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1680,13 +1705,10 @@ export function LandingPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setViewMode('app')
-                setActiveTab('dashboard')
-              }}
+              onClick={() => handleOpenCompanion('dashboard')}
               className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              <span>Launch Companion App</span>
+              <span>{currentUser ? 'Open Companion App' : 'Sign In to Companion'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
