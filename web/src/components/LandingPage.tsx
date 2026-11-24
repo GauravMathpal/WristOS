@@ -36,6 +36,7 @@ import {
   LogOut
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
+import { DualBrandHeader } from './BrandLogos'
 
 export function LandingPage() {
   const { setViewMode, setActiveTab, currentUser, watch, connectWatch, logoutUser } = useAppStore()
@@ -293,23 +294,7 @@ export function LandingPage() {
       <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#07060c]/85 border-b border-purple-500/15 px-4 sm:px-8 py-3.5 transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           
-          <div 
-            onClick={() => setViewMode('landing')}
-            className="flex items-center gap-3 cursor-pointer group"
-          >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 p-[1.5px] shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-[#0d0918] rounded-[10px] flex items-center justify-center">
-                <span className="font-extrabold text-sm text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 font-mono">W</span>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm tracking-tight text-white group-hover:text-purple-300 transition-colors">WristOS</span>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">v1.16</span>
-              </div>
-              <p className="text-[10px] text-slate-400 hidden sm:block font-medium">Wearable Operating System & Ambient Intelligence</p>
-            </div>
-          </div>
+          <DualBrandHeader version="v1.16" onClick={() => setViewMode('landing')} />
 
           <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-300">
             <a href="#hero" className="hover:text-white transition-colors">Overview</a>

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { UserProfile } from '../types'
+import { WristOSLogoIcon, GoogleBadge } from './BrandLogos'
 
 export function LoginScreen() {
   const { 
@@ -165,13 +166,13 @@ export function LoginScreen() {
           <span className="sm:hidden">Portal</span>
         </motion.button>
 
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 p-[1.5px] shadow-md shadow-purple-500/30">
-            <div className="w-full h-full bg-[#0d0918] rounded-[10px] flex items-center justify-center font-bold text-xs text-white">
-              W
-            </div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
+            <WristOSLogoIcon size={30} />
+            <span className="font-bold text-xs sm:text-sm text-white tracking-tight">WristOS Portal</span>
           </div>
-          <span className="font-bold text-xs sm:text-sm text-white tracking-tight">WristOS Portal</span>
+          <div className="h-4 w-px bg-white/15" />
+          <GoogleBadge subtitle="Cloud Sync" />
         </div>
       </header>
 

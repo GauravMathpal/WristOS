@@ -38,6 +38,7 @@ import { ProfileScreen } from './components/ProfileScreen'
 import { CommandPalette } from './components/CommandPalette'
 import { LandingPage } from './components/LandingPage'
 import { LoginScreen } from './components/LoginScreen'
+import { WristOSLogoIcon, GoogleBadge } from './components/BrandLogos'
 
 export function App() {
   const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser, logoutUser } = useAppStore()
@@ -164,11 +165,7 @@ export function App() {
               className="flex items-center gap-3 cursor-pointer group"
               title="Return to WristOS Portal Homepage"
             >
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-500 via-fuchsia-500 to-pink-500 p-[1.5px] shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform shrink-0">
-                <div className="w-full h-full bg-[#0d0918] rounded-[14px] flex items-center justify-center">
-                  <span className="font-extrabold text-base text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 font-mono">W</span>
-                </div>
-              </div>
+              <WristOSLogoIcon size={38} className="group-hover:scale-105 transition-transform shrink-0" />
 
               {!sidebarCollapsed && (
                 <div className="overflow-hidden">
@@ -328,6 +325,9 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Google Gemini Badge */}
+            <GoogleBadge subtitle="Gemini 2.5" className="hidden lg:flex" />
+
             {/* Theme Mode Toggle (Sun / Moon) */}
             <motion.button
               whileTap={{ scale: 0.92 }}
