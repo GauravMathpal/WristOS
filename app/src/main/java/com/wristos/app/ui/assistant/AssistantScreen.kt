@@ -254,7 +254,11 @@ fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
                 IconButton(
                     onClick = {
                         if (isListening) {
+                            val capturedText = speechText.trim()
                             viewModel.voiceManager.stopListening()
+                            if (capturedText.isNotBlank()) {
+                                viewModel.sendMessage(capturedText)
+                            }
                         } else {
                             if (androidx.core.content.ContextCompat.checkSelfPermission(
                                     context,
