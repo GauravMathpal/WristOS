@@ -1,9 +1,16 @@
 {
   "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json",
+  "C_Cpp.codeAnalysis.clangTidy.enabled": false,
+  "C_Cpp.errorSquiggles": "enabled",
   "clangd.arguments": [
     "--compile-commands-dir=${workspaceFolder}",
     "--background-index",
     "--completion-style=detailed",
-    "--header-insertion=never"
-  ]
+    "--header-insertion=never",
+    "--clang-tidy",
+    "--clang-tidy-checks=-*,bugprone-*,-bugprone-narrowing-conversions"
+  ],
+  "files.associations": {
+    "*.h": "cpp"
+  }
 }
