@@ -77,9 +77,27 @@ export async function seedInitialDataIfEmpty() {
       {
         id: 'm-3',
         tag: 'Work',
-        fact: 'Lead Android & AI developer for WristOS ecosystem with Dhruv as development partner.',
+        fact: 'Lead Android & AI developer for WristOS ecosystem with Dhruv as development partner in Group 1.',
         createdAt: now - 86400000 * 4,
         updatedAt: now - 86400000 * 4,
+        deletedAt: null,
+        syncStatus: 'pending'
+      },
+      {
+        id: 'm-4',
+        tag: 'Team',
+        fact: 'Core Project Team: Group 1 (Gaurav & Dhruv - AI/Android), Group 2 (Daksh & Atharv - Firmware/Sensors), Group 3 (Ashish, Arjun, Ravikant - Product/QA).',
+        createdAt: now - 86400000 * 3,
+        updatedAt: now - 86400000 * 3,
+        deletedAt: null,
+        syncStatus: 'pending'
+      },
+      {
+        id: 'm-5',
+        tag: 'Hardware',
+        fact: 'Group 2 firmware milestone: InfiniTime v1.16 compiled with FreeRTOS 10 and LVGL 7, supporting battery ADC and tap-to-clear notifications.',
+        createdAt: now - 86400000 * 2,
+        updatedAt: now - 86400000 * 2,
         deletedAt: null,
         syncStatus: 'pending'
       }

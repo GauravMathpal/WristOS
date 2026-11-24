@@ -236,42 +236,61 @@ export function LoginScreen() {
           {/* 1. QUICK USER SELECT (PROFILES) */}
           {authMode === 'switch' && (
             <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-purple-300/80 px-1">
-                Saved User Accounts
-              </p>
+              <div className="flex items-center justify-between px-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-purple-300/80">
+                  WristOS Team Accounts
+                </p>
+                <span className="text-[10px] text-slate-400 font-mono font-medium">
+                  {allUsers.length} Profiles
+                </span>
+              </div>
               
-              <div className="space-y-2.5">
-                {allUsers.map((u) => (
-                  <motion.div
-                    key={u.id}
-                    whileHover={{ scale: 1.015, x: 2 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleQuickLogin(u)}
-                    className="p-3.5 rounded-2xl bg-[#16102c]/70 hover:bg-purple-900/30 border border-purple-500/20 hover:border-purple-500/40 cursor-pointer flex items-center justify-between transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${u.avatarColor} p-0.5 shrink-0 shadow-md`}>
-                        <div className="w-full h-full rounded-[14px] bg-[#0c0819] flex items-center justify-center font-bold text-sm text-white">
-                          {u.name.charAt(0)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-extrabold text-white group-hover:text-pink-200 transition-colors">
-                            {u.name}
-                          </h4>
-                        </div>
-                        <p className="text-[11px] text-slate-400">{u.email}</p>
-                        <p className="text-[10px] text-purple-300/80 font-mono">Goal: {u.dailyStepGoal.toLocaleString()} steps</p>
-                      </div>
-                    </div>
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                {allUsers.map((u) => {
+                  const isGroup1 = u.role.includes('Group 1')
+                  const isGroup2 = u.role.includes('Group 2')
+                  const isGroup3 = u.role.includes('Group 3')
 
-                    <div className="flex items-center gap-1 text-xs font-bold text-purple-300 group-hover:text-white transition-colors">
-                      <span>Log In</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </div>
-                  </motion.div>
-                ))}
+                  return (
+                    <motion.div
+                      key={u.id}
+                      whileHover={{ scale: 1.015, x: 2 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleQuickLogin(u)}
+                      className="p-3.5 rounded-2xl bg-[#16102c]/70 hover:bg-purple-900/30 border border-purple-500/20 hover:border-purple-500/40 cursor-pointer flex items-center justify-between transition-all group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${u.avatarColor} p-0.5 shrink-0 shadow-md`}>
+                          <div className="w-full h-full rounded-[14px] bg-[#0c0819] flex items-center justify-center font-bold text-sm text-white">
+                            {u.name.charAt(0)}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-white group-hover:text-pink-200 transition-colors truncate">
+                              {u.name}
+                            </h4>
+                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                              isGroup1 ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                              isGroup2 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
+                              isGroup3 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                              'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                            }`}>
+                              {isGroup1 ? 'G1: AI/App' : isGroup2 ? 'G2: Firmware' : isGroup3 ? 'G3: QA/Docs' : 'Team'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate">{u.role.replace(/ \(Group \d:.*?\)/, '')}</p>
+                          <p className="text-[10px] text-purple-300/80 font-mono">Goal: {u.dailyStepGoal.toLocaleString()} steps • {u.email}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-xs font-bold text-purple-300 group-hover:text-white transition-colors shrink-0 pl-2">
+                        <span>Log In</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </div>
 
               <div className="pt-2 text-center">

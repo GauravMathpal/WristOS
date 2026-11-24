@@ -370,63 +370,84 @@ export function ProfileScreen() {
 
       {/* Multi-User Switcher Carousel */}
       <div className="p-6 rounded-3xl bg-[#140e29]/90 border border-white/[0.08] shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-purple-400" />
-              <span>Switch User Account</span>
+              <span>Project Team Profiles</span>
             </h3>
-            <p className="text-[11px] text-slate-400">
-              Each user maintains a separate profile, custom goals, and paired smartwatch telemetry.
+            <p className="text-xs text-slate-400">
+              WristOS core engineering, firmware, and product team accounts. Each profile maintains personalized watch telemetry and biometrics.
             </p>
           </div>
 
           <button
             onClick={() => setViewMode('login')}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-slate-300 hover:text-white border border-white/10 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-slate-300 hover:text-white border border-white/10 transition-all self-start sm:self-auto shrink-0"
           >
             <UserPlus className="w-3.5 h-3.5 text-cyan-400" />
             <span>Add / Register User</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pt-2">
           {allUsers.map((u) => {
             const isCurrent = currentUser ? u.id === currentUser.id : false
+            const isGroup1 = u.role.includes('Group 1')
+            const isGroup2 = u.role.includes('Group 2')
+            const isGroup3 = u.role.includes('Group 3')
+
             return (
               <motion.div
                 key={u.id}
-                whileHover={{ y: -2 }}
+                whileHover={{ y: -3 }}
                 onClick={() => switchUser(u.id)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
+                className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                   isCurrent 
-                    ? 'bg-gradient-to-b from-purple-900/30 to-[#17102e] border-purple-500/50 shadow-lg shadow-purple-950/40' 
-                    : 'bg-[#0d091e] border-white/[0.05] hover:border-white/15'
+                    ? 'bg-gradient-to-b from-purple-900/40 via-[#1a1236] to-[#120c26] border-purple-400/60 shadow-xl shadow-purple-950/60 ring-1 ring-purple-400/30' 
+                    : 'bg-[#0d091e] border-white/[0.06] hover:border-purple-500/30 hover:bg-[#140e2b]'
                 }`}
               >
                 {isCurrent && (
-                  <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-purple-500 text-white font-mono">
+                  <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-gradient-to-r from-purple-500 to-pink-500 text-white font-mono shadow-md">
                     ACTIVE
                   </span>
                 )}
 
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${u.avatarColor} p-0.5 shrink-0`}>
-                    <div className="w-full h-full rounded-[10px] bg-[#0c0819] flex items-center justify-center font-bold text-xs text-white">
-                      {u.name.charAt(0)}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${u.avatarColor} p-0.5 shrink-0 shadow-md`}>
+                      <div className="w-full h-full rounded-[14px] bg-[#0c0819] flex items-center justify-center font-bold text-sm text-white">
+                        {u.name.charAt(0)}
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden pr-12">
+                      <p className="text-sm font-extrabold text-white truncate">{u.name}</p>
+                      <p className="text-[10px] text-purple-300/70 truncate font-mono">{u.email}</p>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-extrabold text-white truncate">{u.name}</p>
-                    <p className="text-[10px] text-purple-300/70 truncate">{u.email}</p>
+                  {/* Group Pill Tag */}
+                  <div>
+                    <span className={`inline-block text-[9px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                      isGroup1 ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' :
+                      isGroup2 ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' :
+                      isGroup3 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                      'bg-slate-500/15 text-slate-300 border-slate-500/30'
+                    }`}>
+                      {isGroup1 ? 'Group 1: AI & App' : isGroup2 ? 'Group 2: Watch & Firmware' : isGroup3 ? 'Group 3: Product & QA' : 'Team Member'}
+                    </span>
+                    <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-tight">
+                      {u.role.replace(/ \(Group \d:.*?\)/, '')}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-[10px] text-slate-400 pt-3 mt-3 border-t border-white/[0.04]">
-                  <span>Goal: {u.dailyStepGoal.toLocaleString()} st</span>
-                  <span className="text-pink-300 font-semibold">
-                    {isCurrent ? 'Viewing' : 'Switch →'}
+                <div className="flex justify-between items-center text-[10px] text-slate-400 pt-3 mt-3 border-t border-white/[0.06]">
+                  <span className="font-mono text-slate-300 font-medium">Goal: {u.dailyStepGoal.toLocaleString()} st</span>
+                  <span className={`font-bold ${isCurrent ? 'text-pink-300' : 'text-purple-400 hover:text-purple-300'}`}>
+                    {isCurrent ? 'Viewing Profile' : 'Switch Persona →'}
                   </span>
                 </div>
               </motion.div>

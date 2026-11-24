@@ -9,36 +9,84 @@ export const DEFAULT_USERS: UserProfile[] = [
     name: 'Gaurav Mathpal',
     email: 'gaurav@wristos.com',
     avatarColor: 'from-purple-500 via-fuchsia-500 to-pink-500',
-    role: 'Lead Systems Architect & Creator',
-    bio: 'Building the next generation of ambient wearable intelligence on WatchOS & ARM Cortex-M4.',
+    role: 'Lead Systems Architect & Creator (Group 1: AI & App)',
+    bio: 'Architecting the WristOS ambient intelligence ecosystem, companion Android app, Gemini AI integration, and BLE bridge.',
     dailyStepGoal: 10000,
     targetHeartRate: 72,
-    pairedWatchName: 'WatchOS BLE Primary',
+    pairedWatchName: 'Gaurav’s WristOS Watch',
     createdAt: 1700000000000
   },
   {
     id: 'user-2',
-    name: 'Sarah Connor',
-    email: 'sarah@wristos.com',
-    avatarColor: 'from-cyan-500 via-teal-500 to-blue-600',
-    role: 'Endurance Athlete & Fitness Coach',
-    bio: 'Daily marathon training and biometric optimization with real-time BLE telemetry.',
-    dailyStepGoal: 12500,
-    targetHeartRate: 64,
-    pairedWatchName: "Sarah's WatchOS Pro",
+    name: 'Dhruv',
+    email: 'dhruv@wristos.com',
+    avatarColor: 'from-indigo-500 via-purple-500 to-pink-500',
+    role: 'AI & Android Development Lead (Group 1: AI & App)',
+    bio: 'Specializing in Kotlin Jetpack Compose, Room database synchronization, and Gemini AI assistant pipeline.',
+    dailyStepGoal: 11000,
+    targetHeartRate: 70,
+    pairedWatchName: 'Dhruv’s WristOS Pro',
     createdAt: 1700100000000
   },
   {
     id: 'user-3',
-    name: 'Alex Rivera',
-    email: 'alex@wristos.com',
-    avatarColor: 'from-amber-500 via-orange-500 to-rose-500',
-    role: 'Software Developer & Biohacker',
-    bio: 'Focus sprints, ambient memory logging, and continuous wellness tracking.',
-    dailyStepGoal: 8500,
-    targetHeartRate: 70,
-    pairedWatchName: 'Alex WristOS Dev',
+    name: 'Daksh',
+    email: 'daksh@wristos.com',
+    avatarColor: 'from-cyan-500 via-teal-500 to-blue-600',
+    role: 'Embedded Firmware Lead (Group 2: Watch & Firmware)',
+    bio: 'Leading InfiniTime C++ firmware development on Nordic nRF52832, FreeRTOS tasks, and LVGL display drivers.',
+    dailyStepGoal: 10000,
+    targetHeartRate: 68,
+    pairedWatchName: 'Daksh’s PineTime Dev',
     createdAt: 1700200000000
+  },
+  {
+    id: 'user-4',
+    name: 'Atharv',
+    email: 'atharv@wristos.com',
+    avatarColor: 'from-emerald-500 via-teal-500 to-cyan-600',
+    role: 'Sensors, BLE Protocol & Display (Group 2: Watch & Firmware)',
+    bio: 'Optimizing Everlight HRS3300 optical heart rate sensor, BMA421 accelerometer step counting, and BLE GATT services.',
+    dailyStepGoal: 12000,
+    targetHeartRate: 65,
+    pairedWatchName: 'Atharv’s WristOS BLE',
+    createdAt: 1700300000000
+  },
+  {
+    id: 'user-5',
+    name: 'Ashish',
+    email: 'ashish@wristos.com',
+    avatarColor: 'from-amber-500 via-orange-500 to-rose-500',
+    role: 'Product Co-Lead & Quality Assurance (Group 3: Product & QA)',
+    bio: 'Directing end-to-end product verification, Bluetooth sync test harnesses, and presentation quality control.',
+    dailyStepGoal: 9500,
+    targetHeartRate: 74,
+    pairedWatchName: 'Ashish’s WatchOS',
+    createdAt: 1700400000000
+  },
+  {
+    id: 'user-6',
+    name: 'Arjun',
+    email: 'arjun@wristos.com',
+    avatarColor: 'from-violet-500 via-fuchsia-500 to-rose-500',
+    role: 'UI/UX Research & Systems QA (Group 3: Product & QA)',
+    bio: 'Designing glanceable smartwatch typography, testing multi-screen touch interactions, and user experience research.',
+    dailyStepGoal: 10500,
+    targetHeartRate: 72,
+    pairedWatchName: 'Arjun’s PineTime',
+    createdAt: 1700500000000
+  },
+  {
+    id: 'user-7',
+    name: 'Ravikant',
+    email: 'ravikant@wristos.com',
+    avatarColor: 'from-rose-500 via-pink-500 to-orange-500',
+    role: 'Documentation & Ecosystem Testing (Group 3: Product & QA)',
+    bio: 'Maintaining hardware and BLE specifications, developer documentation, and firmware test suite execution.',
+    dailyStepGoal: 9000,
+    targetHeartRate: 75,
+    pairedWatchName: 'Ravikant’s WristOS',
+    createdAt: 1700600000000
   }
 ]
 
@@ -48,14 +96,20 @@ const loadSavedUsers = (): UserProfile[] => {
     const raw = localStorage.getItem('wristos_users_list')
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      // Check if localStorage has outdated demo profiles like 'Sarah Connor' or 'Alex Rivera'
+      const hasOutdatedUsers = Array.isArray(parsed) && parsed.some((u: any) => u.name === 'Sarah Connor' || u.name === 'Alex Rivera')
+      // Ensure real team members are present
+      if (!hasOutdatedUsers && Array.isArray(parsed) && parsed.length >= 7) {
+        return parsed
+      }
     }
+    localStorage.setItem('wristos_users_list', JSON.stringify(DEFAULT_USERS))
   } catch (_) {}
   return DEFAULT_USERS
 }
 
 const loadSavedCurrentUser = (users: UserProfile[]): UserProfile | null => {
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined') return DEFAULT_USERS[0]
   try {
     const currentId = localStorage.getItem('wristos_active_user_id')
     if (currentId) {
@@ -63,7 +117,7 @@ const loadSavedCurrentUser = (users: UserProfile[]): UserProfile | null => {
       if (found) return found
     }
   } catch (_) {}
-  return null
+  return users[0] || DEFAULT_USERS[0]
 }
 
 const initialUsers = loadSavedUsers()
