@@ -45,7 +45,11 @@ class WatchBleService {
     this.isInitialized = true
   }
 
-  async scanAndConnect(onTelemetry: (t: Partial<WatchTelemetry>) => void, onAiTrigger?: () => void): Promise<string> {
+  async scanAndConnect(
+    onTelemetry: (t: Partial<WatchTelemetry>) => void,
+    onAiTrigger?: () => void,
+    onDisconnected?: () => void
+  ): Promise<string> {
     await this.initialize()
 
     // 1. Android Native Platform via Capacitor
@@ -63,7 +67,10 @@ class WatchBleService {
       })
 
       this.deviceId = device.deviceId
-      await BleClient.connect(this.deviceId)
+      await BleClient.connect(this.deviceId, () => {
+        this.deviceId = null
+        onDisconnected?.()
+      })
 
       // Synchronize Current Time (CTS)
       await this.syncCurrentTime(this.deviceId)
@@ -135,7 +142,7 @@ class WatchBleService {
 
     // 2. Standard Web Bluetooth API (Google Chrome on Android, Windows, Mac, Linux)
     if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
-      return await this.connectWebBluetooth(onTelemetry, onAiTrigger)
+      return await this.connectWebBluetooth(onTelemetry, onAiTrigger, onDisconnected)
     }
 
     // 3. Fallback to Simulator if browser lacks Bluetooth support
@@ -145,7 +152,8 @@ class WatchBleService {
 
   private async connectWebBluetooth(
     onTelemetry: (t: Partial<WatchTelemetry>) => void,
-    onAiTrigger?: () => void
+    onAiTrigger?: () => void,
+    onDisconnected?: () => void
   ): Promise<string> {
     const navBle = (navigator as any).bluetooth
     let device: any = null
@@ -195,9 +203,13 @@ class WatchBleService {
     // Auto-handle unexpected disconnects
     device.addEventListener('gattserverdisconnected', () => {
       console.log('WatchOS disconnected')
-      if (this.webDevice) {
-        this.webDevice = null
-        this.webServer = null
+      const wasConnected = this.webDevice !== null
+      this.webDevice = null
+      this.webServer = null
+      this.stepsChar = null
+      this.batteryChar = null
+      if (wasConnected) {
+        onDisconnected?.()
       }
     })
 

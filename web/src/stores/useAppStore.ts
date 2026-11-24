@@ -320,6 +320,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
           }
+        },
+        () => {
+          set((state) => ({
+            isSimulated: false,
+            watch: {
+              ...state.watch,
+              connectionState: 'disconnected'
+            }
+          }))
         }
       )
       set((state) => ({

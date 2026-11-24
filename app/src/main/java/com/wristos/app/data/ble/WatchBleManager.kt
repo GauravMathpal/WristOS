@@ -66,6 +66,8 @@ class WatchBleManager(private val context: Context) {
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
     private var reconnectAttempts = 0
+    private var directConnectFailures = 0
+    private var refreshedCacheForCurrentGatt = false
     private var connectionWatchdogJob: Job? = null
     private var reconnectJob: Job? = null
     private var periodicSyncJob: Job? = null
@@ -162,11 +164,21 @@ class WatchBleManager(private val context: Context) {
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             scope.launch {
+                // Ignore late callbacks from stale closed/superseded GATT handles
+                if (gatt != null && bluetoothGatt != null && gatt !== bluetoothGatt) {
+                    try {
+                        gatt.close()
+                    } catch (_: Exception) {
+                    }
+                    return@launch
+                }
+
                 connectionWatchdogJob?.cancel()
                 connectionWatchdogJob = null
 
                 if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                     reconnectAttempts = 0
+                    directConnectFailures = 0
                     reconnectJob?.cancel()
                     isExplicitDisconnect = false
 
@@ -183,7 +195,10 @@ class WatchBleManager(private val context: Context) {
                     gatt?.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
                     Log.w(TAG, "GATT disconnected (status=$status, newState=$newState)")
-                    cleanupGatt()
+                    if (status == 133 || status == 257 || newState != BluetoothProfile.STATE_CONNECTED) {
+                        directConnectFailures++
+                    }
+                    cleanupGatt(alreadyDisconnected = (newState == BluetoothProfile.STATE_DISCONNECTED))
                     _watchData.value = _watchData.value.copy(
                         connectionState = WatchConnectionState.DISCONNECTED
                     )
@@ -197,6 +212,20 @@ class WatchBleManager(private val context: Context) {
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
                 scope.launch {
+                    if (gatt !== bluetoothGatt) return@launch
+
+                    val musicChar = gatt.getService(BleConstants.SERVICE_MUSIC)
+                        ?.getCharacteristic(BleConstants.CHAR_MUSIC_EVENT)
+                    if (musicChar == null && !refreshedCacheForCurrentGatt) {
+                        refreshedCacheForCurrentGatt = true
+                        Log.w(TAG, "CHAR_MUSIC_EVENT missing from cached GATT table; refreshing and re-discovering")
+                        if (refreshGattCache(gatt)) {
+                            delay(250L)
+                            gatt.discoverServices()
+                            return@launch
+                        }
+                    }
+
                     clearGattQueue()
                     enqueueGattOp { syncCurrentTime(gatt) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
@@ -317,8 +346,9 @@ class WatchBleManager(private val context: Context) {
             1 -> 1500L
             2 -> 3000L
             3 -> 6000L
-            4 -> 12000L
-            else -> 25000L
+            4 -> 15000L
+            5 -> 30000L
+            else -> 60000L
         }
         Log.d(TAG, "Scheduling watch auto-reconnect #$reconnectAttempts in ${delayMs}ms")
         reconnectJob = scope.launch {
@@ -362,12 +392,13 @@ class WatchBleManager(private val context: Context) {
         isExplicitDisconnect = false
         if (!preserveReconnectCount) {
             reconnectAttempts = 0
+            directConnectFailures = 0
         }
         reconnectJob?.cancel()
 
-        // 1. Try previously connected watch address first (even if not OS-bonded)
+        // 1. Try previously connected watch address first unless direct connect failed repeatedly
         val savedAddr = prefs.getLastWatchAddress()
-        if (!savedAddr.isNullOrBlank()) {
+        if (!savedAddr.isNullOrBlank() && directConnectFailures < 2) {
             try {
                 val savedDevice = bluetoothAdapter.getRemoteDevice(savedAddr)
                 Log.d(TAG, "Connecting to saved watch: $savedAddr")
@@ -378,21 +409,23 @@ class WatchBleManager(private val context: Context) {
             }
         }
 
-        // 2. Check OS bonded devices
-        val bonded = bluetoothAdapter.bondedDevices
-        val pairedWatch = bonded?.firstOrNull { d ->
-            val name = d.name ?: ""
-            name.contains("WristOS", ignoreCase = true) ||
-                name.contains("PineTime", ignoreCase = true) ||
-                name.contains("InfiniTime", ignoreCase = true)
-        }
-        if (pairedWatch != null) {
-            Log.d(TAG, "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address})")
-            connectToDevice(pairedWatch)
-            return
+        // 2. Check OS bonded devices if direct connect hasn't already failed repeatedly
+        if (directConnectFailures < 2) {
+            val bonded = bluetoothAdapter.bondedDevices
+            val pairedWatch = bonded?.firstOrNull { d ->
+                val name = d.name ?: ""
+                name.contains("WristOS", ignoreCase = true) ||
+                    name.contains("PineTime", ignoreCase = true) ||
+                    name.contains("InfiniTime", ignoreCase = true)
+            }
+            if (pairedWatch != null) {
+                Log.d(TAG, "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address})")
+                connectToDevice(pairedWatch)
+                return
+            }
         }
 
-        // 3. Active LE scan
+        // 3. Active LE scan (always picks up fresh advertising packets regardless of cached MAC/GATT state)
         startActiveScan()
     }
 
@@ -404,8 +437,14 @@ class WatchBleManager(private val context: Context) {
         isScanning = true
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.SCANNING)
 
+        val scanMode = if (reconnectAttempts <= 2) {
+            ScanSettings.SCAN_MODE_LOW_LATENCY
+        } else {
+            // Balanced mode prevents Android background scan throttling during long disconnections
+            ScanSettings.SCAN_MODE_BALANCED
+        }
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(scanMode)
             .setReportDelay(0)
             .build()
 
@@ -455,8 +494,10 @@ class WatchBleManager(private val context: Context) {
 
     private fun connectToDevice(device: BluetoothDevice) {
         if (!hasBluetoothConnectPermission()) return
+        stopScan()
         connectionWatchdogJob?.cancel()
         cleanupGatt()
+        refreshedCacheForCurrentGatt = false
 
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.CONNECTING)
 
@@ -465,13 +506,13 @@ class WatchBleManager(private val context: Context) {
         } else {
             device.connectGatt(appContext, false, gattCallback)
         }
-        refreshGattCache(gatt)
         bluetoothGatt = gatt
 
         connectionWatchdogJob = scope.launch {
-            delay(6000L)
+            delay(7000L)
             if (_watchData.value.connectionState == WatchConnectionState.CONNECTING) {
-                Log.d(TAG, "Direct connect timed out (>6s); falling back to active low-latency scan")
+                Log.d(TAG, "Direct connect timed out (>7s); falling back to LE scan")
+                directConnectFailures++
                 cleanupGatt()
                 startActiveScan()
             }
@@ -489,12 +530,14 @@ class WatchBleManager(private val context: Context) {
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
     }
 
-    private fun cleanupGatt() {
+    private fun cleanupGatt(alreadyDisconnected: Boolean = false) {
         periodicSyncJob?.cancel()
         periodicSyncJob = null
         clearGattQueue()
         try {
-            bluetoothGatt?.disconnect()
+            if (!alreadyDisconnected) {
+                bluetoothGatt?.disconnect()
+            }
             bluetoothGatt?.close()
         } catch (_: Exception) {
         } finally {
