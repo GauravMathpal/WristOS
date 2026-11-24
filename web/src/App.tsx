@@ -38,7 +38,7 @@ import { ProfileScreen } from './components/ProfileScreen'
 import { CommandPalette } from './components/CommandPalette'
 import { LandingPage } from './components/LandingPage'
 import { LoginScreen } from './components/LoginScreen'
-import { WristOSLogoIcon, GoogleBadge } from './components/BrandLogos'
+import { WristOSLogoIcon } from './components/BrandLogos'
 
 export function App() {
   const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser, logoutUser } = useAppStore()
@@ -285,23 +285,33 @@ export function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         
         {/* Top Header Bar */}
-        <header className="h-16 border-b border-purple-500/15 bg-[#06040d]/70 backdrop-blur-2xl flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
-          <div className="flex items-center gap-3">
+        <header className="h-16 border-b border-purple-500/15 bg-[#06040d]/80 backdrop-blur-2xl flex items-center justify-between px-3 sm:px-6 shrink-0 z-10 shadow-sm gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile Brand Mark (shown on phones where sidebar is hidden) */}
+            <div 
+              onClick={() => setViewMode('landing')} 
+              className="md:hidden flex items-center gap-2 cursor-pointer shrink-0 mr-1 group"
+              title="Return to WristOS Landing"
+            >
+              <WristOSLogoIcon size={30} className="group-hover:scale-105 transition-transform" />
+              <span className="font-extrabold text-sm text-white tracking-tight">WristOS</span>
+            </div>
+
             {/* Search shortcut button (Raycast / Linear style) */}
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-[#140e29]/70 hover:bg-[#1a1236] border border-purple-500/20 text-xs text-slate-300 transition-all shadow-inner"
+              className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-[#140e29]/70 hover:bg-[#1a1236] border border-purple-500/20 text-xs text-slate-300 transition-all shadow-inner shrink-0"
             >
               <Search className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">Search or command...</span>
+              <span className="hidden sm:inline">Search...</span>
               <kbd className="hidden sm:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/30">⌘K</kbd>
             </motion.button>
 
             {/* Smartwatch connection pill in header */}
             <div 
               onClick={() => setActiveTab('devices')}
-              className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[#140e29]/70 border border-purple-500/20 text-xs font-medium cursor-pointer hover:border-purple-500/40 transition-all"
+              className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-[#140e29]/70 border border-purple-500/20 text-xs font-medium cursor-pointer hover:border-purple-500/40 transition-all shrink-0"
             >
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-600'}`} />
               <span className="text-[11px] text-slate-200">
@@ -316,18 +326,15 @@ export function App() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setViewMode('landing')}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl bg-[#140e29]/70 hover:bg-purple-900/30 border border-purple-500/20 text-xs font-semibold text-purple-300 hover:text-white transition-all shadow-inner shrink-0"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl bg-[#140e29]/70 hover:bg-purple-900/30 border border-purple-500/20 text-xs font-semibold text-purple-300 hover:text-white transition-all shadow-inner shrink-0"
               title="Return to WristOS Portal Homepage"
             >
               <Globe className="w-3.5 h-3.5 text-pink-400" />
-              <span className="hidden sm:inline">Portal</span>
+              <span>Portal</span>
             </motion.button>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* Google Gemini Badge */}
-            <GoogleBadge subtitle="Gemini 2.5" className="hidden lg:flex" />
-
+          <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
             {/* Theme Mode Toggle (Sun / Moon) */}
             <motion.button
               whileTap={{ scale: 0.92 }}
@@ -352,7 +359,7 @@ export function App() {
             {/* Profile Avatar / User Chip */}
             <div 
               onClick={() => setActiveTab('profile')}
-              className="flex items-center gap-2 px-2 py-1 rounded-2xl hover:bg-white/[0.05] border border-transparent hover:border-purple-500/20 cursor-pointer transition-all group"
+              className="flex items-center gap-2 px-1.5 sm:px-2 py-1 rounded-2xl hover:bg-white/[0.05] border border-transparent hover:border-purple-500/20 cursor-pointer transition-all group shrink-0"
               title={`View ${currentUser?.name || 'User'}'s Profile`}
             >
               <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentUser?.avatarColor || 'from-purple-500 to-pink-500'} p-[1.5px] shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform`}>

@@ -116,9 +116,9 @@ export function GoogleBadge({
 }
 
 /**
- * Combined Dual Lockup: WristOS Logo + Google Logo Lockup for top navigation bars
+ * Combined WristOS Brand Header: WristOS Logo Mark, Wordmark, and Version Badge
  */
-export function DualBrandHeader({ 
+export function WristOSBrandHeader({ 
   version = 'v1.16',
   showTagline = true,
   onClick
@@ -151,12 +151,9 @@ export function DualBrandHeader({
           </p>
         )}
       </div>
-
-      {/* 3. Refined Vertical Glass Divider */}
-      <div className="h-5 w-px bg-white/15 mx-0.5 shrink-0" />
-
-      {/* 4. Google Logo & Gemini Partner Badge */}
-      <GoogleBadge subtitle="Gemini AI" />
     </div>
   )
 }
+
+// Backward compatibility alias
+export const DualBrandHeader = WristOSBrandHeader
