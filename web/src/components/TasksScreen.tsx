@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { db, TaskRecord, CalendarEventRecord } from '../lib/db'
 import { taskRepository, calendarRepository } from '../lib/repository'
+import { extractTaskDetails } from '../lib/actionParser'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAppStore } from '../stores/useAppStore'
 import { 
@@ -112,22 +113,13 @@ export function TasksScreen() {
       text = text.replace(/#health/gi, '').trim()
     }
 
-    // Due time extraction
-    if (/tomorrow/i.test(text)) {
-      dueTime = 'Tomorrow'
-      text = text.replace(/tomorrow/gi, '').trim()
-    } else if (/tonight/i.test(text)) {
-      dueTime = 'Tonight, 9:00 PM'
-      text = text.replace(/tonight/gi, '').trim()
-    } else {
-      const timeMatch = text.match(/(at|by)\s+([0-9]{1,2}(:[0-9]{2})?\s*(am|pm)?)/i)
-      if (timeMatch) {
-        dueTime = `Today, ${timeMatch[2]}`
-        text = text.replace(timeMatch[0], '').trim()
-      }
+    // Due time and title extraction via unified parser
+    const { title: parsedTitle, dueTime: parsedDueTime } = extractTaskDetails(text)
+    if (parsedDueTime !== 'Today') {
+      dueTime = parsedDueTime
     }
 
-    const title = text || quickInput.trim()
+    const title = parsedTitle || quickInput.trim()
     await taskRepository.add(title, dueTime, priority, category)
     setQuickInput('')
     showToast(`Task created: "${title}" (${priority})`)

@@ -18,7 +18,8 @@ export function hasTaskIntent(text: string): boolean {
   return (
     /\b(have to|need to|must|have complete|complete|finish|submit|prepare|buy|call|schedule|remind|agenda|task|todo|to-do|due|deadline)\b/i.test(lower) ||
     /\b(tmr|tomorrow|tonight)\b/i.test(lower) ||
-    /\b(by|at)\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lower)
+    /\b(by|at)\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lower) ||
+    /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(lower)
   )
 }
 
@@ -53,13 +54,29 @@ export function extractTaskDetails(rawPrompt: string): { title: string; dueTime:
   const isTonight = /\btonight\b/i.test(lower)
   const isToday = /\btoday\b/i.test(lower)
 
-  const clockMatch = text.match(/\b(?:at|by\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)
+  // 1a. Detect clock time: 12-hour with am/pm (e.g. 5pm, 5:00 pm), 24-hour (17:00), or bare hour with preposition (at 5, by 5)
   let timeStr = ''
-  if (clockMatch) {
-    const hour = parseInt(clockMatch[1], 10)
-    const min = clockMatch[2] ? clockMatch[2] : '00'
-    const ampm = clockMatch[3].toUpperCase()
+  const standardMatch = text.match(/\b(?:at|by\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)
+  const militaryMatch = text.match(/\b(?:at|by\s+)?([01]?\d|2[0-3]):([0-5]\d)\b/i)
+  const bareMatch = text.match(/\b(?:at|by)\s+(\d{1,2})\b/i)
+
+  if (standardMatch) {
+    const hour = parseInt(standardMatch[1], 10)
+    const min = standardMatch[2] ? standardMatch[2] : '00'
+    const ampm = standardMatch[3].toUpperCase()
     timeStr = `${hour}:${min} ${ampm}`
+  } else if (militaryMatch) {
+    let hour = parseInt(militaryMatch[1], 10)
+    const min = militaryMatch[2]
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    hour = hour % 12 || 12
+    timeStr = `${hour}:${min} ${ampm}`
+  } else if (bareMatch) {
+    const hour = parseInt(bareMatch[1], 10)
+    if (hour >= 1 && hour <= 12) {
+      const ampm = hour >= 1 && hour <= 7 ? 'PM' : 'AM'
+      timeStr = `${hour}:00 ${ampm}`
+    }
   }
 
   if (isTmr) {
@@ -75,7 +92,7 @@ export function extractTaskDetails(rawPrompt: string): { title: string; dueTime:
   // 2. Clean Title
   let title = text
     .replace(
-      /^(please\s+)?(remind me to|create a task to|add a task to|add task to|add a task|add task|create task|schedule a task to|schedule to|schedule a task|schedule|i have to|i have|i need to|i must|i should|have to|need to|set a reminder to|set reminder to)\s*/i,
+      /^(please\s+)?(remind me to|create a task to|add a task to|add task to|add a task|add task|create task|schedule a task to|schedule to|schedule a task|schedule|i have to complete|i have complete|i have to finish|i have finish|i have to|i have|i need to|i must|i should|have to complete|have complete|have to|need to|set a reminder to|set reminder to)\s*/i,
       ''
     )
     .replace(/\b(?:by|at|due|on)?\s*(?:tmr|tomorrow|tonight|today)(?:\s*(?:at|by)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/gi, '')

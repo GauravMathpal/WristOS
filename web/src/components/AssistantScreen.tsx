@@ -602,10 +602,11 @@ export function AssistantScreen() {
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={handleClearMessages}
-            className="px-3 py-1.5 rounded-xl bg-[#161224] text-slate-300 border border-white/[0.08] hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-all flex items-center gap-1.5 text-xs font-semibold shadow-sm"
+            className="px-3 py-1.5 rounded-xl bg-[#161224] text-slate-300 border border-white/[0.08] hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-all flex items-center gap-1.5 text-xs font-semibold shadow-sm shrink-0"
             title="Clear Chat History and start fresh"
           >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <Trash2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="sm:hidden">Clear</span>
             <span className="hidden sm:inline">Clear Chat</span>
           </motion.button>
         </div>

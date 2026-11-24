@@ -3,11 +3,12 @@
     {
       "name": "Mac",
       "includePath": [
-        "${workspaceFolder}/**",
-        "${workspaceFolder}/firmware/src/**",
         "${workspaceFolder}/firmware/src",
+        "${workspaceFolder}/firmware/src/**",
         "${workspaceFolder}/firmware/src/libs/**",
         "${workspaceFolder}/firmware/src/libs/lvgl/**",
+        "${workspaceFolder}/firmware/src/libs/nRF5_SDK_15.3.0_59ac345/components/**",
+        "${workspaceFolder}/simulator/sim",
         "${workspaceFolder}/simulator/sim/**",
         "${workspaceFolder}/simulator/build/**",
         "/opt/homebrew/include/**",
