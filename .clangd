@@ -6,6 +6,16 @@ CompileFlags:
     - -I/Users/gauravm/Projects/WristOS/firmware/src/libs/lvgl
     - -I/Users/gauravm/Projects/WristOS/simulator/sim
     - -I/Users/gauravm/Projects/WristOS/simulator/build
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/host/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/porting/nimble/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/porting/npl/freertos/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/controller/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/host/services/gap/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/host/services/gatt/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/host/util/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/nimble/host/store/ram/include
+    - -isystem/Users/gauravm/Projects/WristOS/firmware/src/libs/mynewt-nimble/ext/tinycrypt/include
     - -isystem/opt/homebrew/include
     - -isystem/opt/homebrew/include/SDL2
     - -std=c++20
