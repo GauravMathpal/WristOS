@@ -239,7 +239,7 @@ export function DashboardScreen() {
   const hydrationPercent = Math.min(100, Math.round((currentWaterMl / goalWaterMl) * 100))
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-md mx-auto pb-8">
+    <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto pb-12">
       
       {/* TOAST NOTIFICATION */}
       <AnimatePresence>
@@ -399,472 +399,483 @@ export function DashboardScreen() {
         })}
       </div>
 
-      {/* 4. WEATHER INFORMATION CAPSULE WIDGET */}
-      {weather && (
-        <motion.div
-          whileHover={{ y: -1 }}
-          className="p-4 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl flex items-center justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              {weather.iconCode === 'sun' ? (
-                <Sun className="w-6 h-6 text-amber-400 animate-spin-slow" />
-              ) : weather.iconCode === 'rain' ? (
-                <CloudRain className="w-6 h-6 text-sky-400" />
-              ) : (
-                <CloudSun className="w-6 h-6 text-amber-300" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black text-white font-mono">{weather.tempC}°C</span>
-                <span className="text-xs font-semibold text-slate-300">{weather.condition}</span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium">
-                H: {weather.tempMax}° • L: {weather.tempMin}° • Humidity {weather.humidity}%
-              </p>
-            </div>
-          </div>
-
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={handleSyncWeather}
-            disabled={isSyncingWeather}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
-            title="Push weather info to WatchOS Smartwatch"
-          >
-            <Send className={`w-3 h-3 ${isSyncingWeather ? 'animate-pulse' : ''}`} />
-            <span>Sync Watch</span>
-          </motion.button>
-        </motion.div>
-      )}
-
-      {/* 5. ACTIVITY CARD (Semicircular Arc Gauge + 3 Biometrics Rows) */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
-      >
-        <div className="flex items-center justify-between">
-          <div 
-            onClick={() => setActiveTab('health')}
-            className="flex items-center gap-2 cursor-pointer group"
-          >
-            <Activity className="w-4 h-4 text-pink-400" />
-            <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
-              Activity & Health
-            </h3>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-          </div>
-
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={handleSyncWatch}
-            disabled={isSyncingTelemetry}
-            className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
-            title="Sync live telemetry from PineTime Watch"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncingTelemetry ? 'animate-spin text-pink-400' : ''}`} />
-            <span>{isSyncingTelemetry ? 'Syncing...' : isConnected ? 'Sync Watch' : 'Connect'}</span>
-          </motion.button>
-        </div>
-
-        <div className="flex items-center justify-between pt-1">
-          {/* Left: Semi-Circular Arc Steps Gauge */}
-          <div className="relative w-36 h-24 flex items-center justify-center shrink-0">
-            <svg className="w-36 h-24" viewBox="0 0 140 85">
-              <defs>
-                <linearGradient id="activityArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#38bdf8" />
-                  <stop offset="50%" stopColor="#a855f7" />
-                  <stop offset="100%" stopColor="#ec4899" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M 18 75 A 52 52 0 0 1 122 75"
-                fill="none"
-                stroke="#221b38"
-                strokeWidth="11"
-                strokeLinecap="round"
-              />
-              <motion.path
-                d="M 18 75 A 52 52 0 0 1 122 75"
-                fill="none"
-                stroke="url(#activityArcGrad)"
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeDasharray={arcLength}
-                initial={{ strokeDashoffset: arcLength }}
-                animate={{ strokeDashoffset: arcOffset }}
-                transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
-              <span className="text-2xl font-black text-white tracking-tight font-mono leading-none">
-                {displaySteps.toLocaleString()}
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium mt-0.5">Steps (Goal: 10k)</span>
-            </div>
-          </div>
-
-          {/* Right: 3 Biometric Rows */}
-          <div className="flex-1 flex flex-col justify-center space-y-2.5 pl-4 sm:pl-6 border-l border-white/[0.06]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-5 h-5 flex items-center justify-center">
-                <Heart className="w-4 h-4 text-rose-400 fill-rose-400 animate-pulse" />
-              </div>
-              <span className="text-xs sm:text-sm font-bold text-white font-mono">
-                {displayHeartRate} bpm
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-5 h-5 flex items-center justify-center">
-                <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
-              </div>
-              <span className="text-xs sm:text-sm font-bold text-white font-mono">
-                {displayCalories} kcal
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-5 h-5 flex items-center justify-center">
-                <MapPin className="w-4 h-4 text-sky-400 fill-sky-400" />
-              </div>
-              <span className="text-xs sm:text-sm font-bold text-white font-mono">
-                {displayDistance} km
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-[10px] text-slate-500 text-center pt-1 font-medium">
-          WristOS activity metrics are for general fitness tracking and not medical diagnosis.
-        </p>
-      </motion.div>
-
-      {/* 6. HABIT TRACKER PROGRESS WIDGET (Module 2.I) */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-base font-extrabold text-white tracking-tight">
-              Habits & Streaks
-            </h3>
-          </div>
-          <span className="text-xs font-semibold text-emerald-300 font-mono">
-            {habits.filter(h => h.completedDates?.includes(todayStr)).length} of {habits.length} Done
-          </span>
-        </div>
-
-        <div className="space-y-2 pt-1">
-          {habits.map((habit) => {
-            const isCompletedToday = habit.completedDates?.includes(todayStr)
-            return (
-              <motion.div
-                key={habit.id}
-                whileHover={{ x: 2 }}
-                onClick={() => handleToggleHabit(habit.id)}
-                className="flex items-center justify-between p-3 rounded-2xl bg-[#130f21] hover:bg-[#1a142c] border border-white/[0.04] hover:border-emerald-500/30 cursor-pointer transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-5 h-5 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                    isCompletedToday
-                      ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]'
-                      : 'border-2 border-slate-600 hover:border-emerald-400'
-                  }`}>
-                    {isCompletedToday && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                  </div>
-
-                  <span className={`text-xs font-semibold truncate ${
-                    isCompletedToday ? 'line-through text-slate-400' : 'text-slate-200'
-                  }`}>
-                    {habit.title}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0 pl-2">
-                  <span className="text-xs font-mono font-bold text-amber-400">
-                    🔥 {habit.streakCount}
-                  </span>
-                  <span className="text-[10px] text-slate-400">days</span>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      </motion.div>
-
-      {/* 7. HYDRATION REMINDER & LOGGER CARD (Module 2.J) */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3.5"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Droplets className="w-4 h-4 text-sky-400" />
-            <h3 className="text-base font-extrabold text-white tracking-tight">
-              Daily Hydration
-            </h3>
-          </div>
-          <span className="text-xs font-bold text-sky-300 font-mono">
-            {currentWaterMl} / {goalWaterMl} ml ({hydrationPercent}%)
-          </span>
-        </div>
-
-        {/* Liquid Progress Bar */}
-        <div className="w-full h-2.5 rounded-full bg-[#1e1933] overflow-hidden p-0.5">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${hydrationPercent}%` }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full rounded-full bg-gradient-to-r from-sky-500 via-cyan-400 to-teal-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]"
-          />
-        </div>
-
-        <div className="flex items-center justify-between pt-1">
-          <div className="text-[11px] text-slate-400">
-            {currentWaterMl >= goalWaterMl ? '🎉 Daily hydration goal achieved!' : `${goalWaterMl - currentWaterMl} ml remaining today`}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={() => handleAddWater(250)}
-              className="px-2.5 py-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center gap-1 transition-all"
-            >
-              <Plus className="w-3 h-3" />
-              <span>250ml</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={() => handleAddWater(500)}
-              className="px-2.5 py-1 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200 text-xs font-bold flex items-center gap-1 transition-all"
-            >
-              <Plus className="w-3 h-3" />
-              <span>500ml</span>
-            </motion.button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* 8. TODAY'S SCHEDULE & SMART CALENDAR (Module 2.E) */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-purple-400" />
-            <h3 className="text-base font-extrabold text-white tracking-tight">
-              Today's Schedule
-            </h3>
-          </div>
-          <span className="text-xs font-bold text-slate-400 font-mono">
-            {calendarEvents.length} Events
-          </span>
-        </div>
-
-        <div className="space-y-2 pt-1">
-          {calendarEvents.length > 0 ? (
-            calendarEvents.map((evt) => {
-              const categoryColor = 
-                evt.category === 'class' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' :
-                evt.category === 'deadline' ? 'bg-rose-500/10 text-rose-300 border-rose-500/30' :
-                evt.category === 'meeting' ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' :
-                'bg-sky-500/10 text-sky-300 border-sky-500/30'
-
-              return (
-                <div
-                  key={evt.id}
-                  className="p-3 rounded-2xl bg-[#130f21] border border-white/[0.04] flex items-center justify-between"
-                >
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white truncate">{evt.title}</span>
-                      <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-md font-mono border ${categoryColor}`}>
-                        {evt.category}
-                      </span>
-                    </div>
-                    {evt.location && (
-                      <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 truncate">
-                        <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                        <span>{evt.location}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  <span className="text-xs font-mono font-bold text-purple-300 shrink-0">
-                    {evt.startTime}
-                  </span>
-                </div>
-              )
-            })
-          ) : (
-            <p className="text-xs text-slate-400 py-1">No calendar events scheduled for today.</p>
-          )}
-        </div>
-      </motion.div>
-
-      {/* 9. TODAY'S TASKS CARD */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3.5"
-      >
-        <div 
-          onClick={() => setActiveTab('tasks')}
-          className="flex items-center justify-between cursor-pointer group"
-        >
-          <div className="flex items-center gap-2">
-            <CheckSquare className="w-4 h-4 text-fuchsia-400" />
-            <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
-              Tasks & Reminders
-            </h3>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-        </div>
-
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 font-medium">
-            {completedTasks.length} of {activeTasks.length || 5} completed
-          </span>
-          <span className="text-sm font-extrabold text-purple-300 font-mono">
-            {completionPercent}%
-          </span>
-        </div>
-
-        <div className="w-full h-2 rounded-full bg-[#221b38] overflow-hidden p-0.5">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${completionPercent}%` }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]"
-          />
-        </div>
-
-        <div className="space-y-2 pt-1">
-          {activeTasks.slice(0, 3).map((task) => (
+      {/* 4. RESPONSIVE DASHBOARD GRID (Left: Biometrics & Habits | Right: AI Intelligence, Tasks & Calendar) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        
+        {/* LEFT COLUMN: Health, Environment & Focus */}
+        <div className="lg:col-span-6 space-y-4 sm:space-y-5">
+          {/* WEATHER INFORMATION CAPSULE WIDGET */}
+          {weather && (
             <motion.div
-              key={task.id}
-              whileHover={{ x: 3 }}
-              onClick={() => handleToggleTask(task)}
-              className="flex items-center justify-between p-3 rounded-2xl bg-[#130f21] hover:bg-[#1b152e] border border-white/[0.04] hover:border-purple-500/30 cursor-pointer transition-all"
+              whileHover={{ y: -1 }}
+              className="p-4 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl flex items-center justify-between"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors shrink-0 ${
-                  task.isCompleted
-                    ? 'bg-gradient-to-tr from-purple-500 to-pink-500 text-white'
-                    : 'border-2 border-slate-600 hover:border-pink-400'
-                }`}>
-                  {task.isCompleted && <Check className="w-3 h-3 stroke-[3]" />}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  {weather.iconCode === 'sun' ? (
+                    <Sun className="w-6 h-6 text-amber-400 animate-spin-slow" />
+                  ) : weather.iconCode === 'rain' ? (
+                    <CloudRain className="w-6 h-6 text-sky-400" />
+                  ) : (
+                    <CloudSun className="w-6 h-6 text-amber-300" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-white font-mono">{weather.tempC}°C</span>
+                    <span className="text-xs font-semibold text-slate-300">{weather.condition}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    H: {weather.tempMax}° • L: {weather.tempMin}° • Humidity {weather.humidity}%
+                  </p>
+                </div>
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={handleSyncWeather}
+                disabled={isSyncingWeather}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
+                title="Push weather info to WatchOS Smartwatch"
+              >
+                <Send className={`w-3 h-3 ${isSyncingWeather ? 'animate-pulse' : ''}`} />
+                <span>Sync Watch</span>
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* ACTIVITY CARD (Semicircular Arc Gauge + 3 Biometrics Rows) */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div 
+                onClick={() => setActiveTab('health')}
+                className="flex items-center gap-2 cursor-pointer group"
+              >
+                <Activity className="w-4 h-4 text-pink-400" />
+                <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
+                  Activity & Health
+                </h3>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={handleSyncWatch}
+                disabled={isSyncingTelemetry}
+                className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white/[0.05] hover:bg-purple-500/20 border border-white/[0.08] hover:border-purple-500/30 text-purple-300 flex items-center gap-1.5 transition-all"
+                title="Sync live telemetry from PineTime Watch"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncingTelemetry ? 'animate-spin text-pink-400' : ''}`} />
+                <span>{isSyncingTelemetry ? 'Syncing...' : isConnected ? 'Sync Watch' : 'Connect'}</span>
+              </motion.button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              {/* Left: Semi-Circular Arc Steps Gauge */}
+              <div className="relative w-36 h-24 flex items-center justify-center shrink-0">
+                <svg className="w-36 h-24" viewBox="0 0 140 85">
+                  <defs>
+                    <linearGradient id="activityArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#38bdf8" />
+                      <stop offset="50%" stopColor="#a855f7" />
+                      <stop offset="100%" stopColor="#ec4899" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M 18 75 A 52 52 0 0 1 122 75"
+                    fill="none"
+                    stroke="#221b38"
+                    strokeWidth="11"
+                    strokeLinecap="round"
+                  />
+                  <motion.path
+                    d="M 18 75 A 52 52 0 0 1 122 75"
+                    fill="none"
+                    stroke="url(#activityArcGrad)"
+                    strokeWidth="11"
+                    strokeLinecap="round"
+                    strokeDasharray={arcLength}
+                    initial={{ strokeDashoffset: arcLength }}
+                    animate={{ strokeDashoffset: arcOffset }}
+                    transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
+                  <span className="text-2xl font-black text-white tracking-tight font-mono leading-none">
+                    {displaySteps.toLocaleString()}
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-medium mt-0.5">Steps (Goal: 10k)</span>
+                </div>
+              </div>
+
+              {/* Right: 3 Biometric Rows */}
+              <div className="flex-1 flex flex-col justify-center space-y-2.5 pl-4 sm:pl-6 border-l border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <Heart className="w-4 h-4 text-rose-400 fill-rose-400 animate-pulse" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                    {displayHeartRate} bpm
+                  </span>
                 </div>
 
-                <p className={`text-xs font-semibold truncate ${
-                  task.isCompleted ? 'line-through text-slate-500' : 'text-slate-200'
-                }`}>
-                  {task.title}
+                <div className="flex items-center gap-2.5">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                    {displayCalories} kcal
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <MapPin className="w-4 h-4 text-sky-400 fill-sky-400" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                    {displayDistance} km
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-500 text-center pt-1 font-medium">
+              WristOS activity metrics are for general fitness tracking and not medical diagnosis.
+            </p>
+          </motion.div>
+
+          {/* HYDRATION REMINDER & LOGGER CARD (Module 2.J) */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Droplets className="w-4 h-4 text-sky-400" />
+                <h3 className="text-base font-extrabold text-white tracking-tight">
+                  Daily Hydration
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-sky-300 font-mono">
+                {currentWaterMl} / {goalWaterMl} ml ({hydrationPercent}%)
+              </span>
+            </div>
+
+            {/* Liquid Progress Bar */}
+            <div className="w-full h-2.5 rounded-full bg-[#1e1933] overflow-hidden p-0.5">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${hydrationPercent}%` }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full rounded-full bg-gradient-to-r from-sky-500 via-cyan-400 to-teal-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-[11px] text-slate-400">
+                {currentWaterMl >= goalWaterMl ? '🎉 Daily hydration goal achieved!' : `${goalWaterMl - currentWaterMl} ml remaining today`}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => handleAddWater(250)}
+                  className="px-2.5 py-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center gap-1 transition-all"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>250ml</span>
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => handleAddWater(500)}
+                  className="px-2.5 py-1 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200 text-xs font-bold flex items-center gap-1 transition-all"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>500ml</span>
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* FOCUS SESSIONS PROGRESS CARD */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setActiveTab('focus')}
+            className="p-5 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl flex items-center justify-between cursor-pointer group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
+                <Clock className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-white group-hover:text-purple-300 transition-colors">
+                  Focus & Productivity
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {todayFocusSessions.length} sessions completed • {totalFocusMinutes} mins focused
                 </p>
               </div>
+            </div>
 
-              <span className="text-[10px] font-mono text-slate-400 shrink-0 pl-2">
-                {task.dueTime}
-              </span>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* 10. FOCUS SESSIONS PROGRESS CARD */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        onClick={() => setActiveTab('focus')}
-        className="p-5 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl flex items-center justify-between cursor-pointer group"
-      >
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
-            <Clock className="w-5 h-5 text-purple-400" />
-          </div>
-          <div>
-            <h4 className="text-sm font-extrabold text-white group-hover:text-purple-300 transition-colors">
-              Focus & Productivity
-            </h4>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {todayFocusSessions.length} sessions completed • {totalFocusMinutes} mins focused
-            </p>
-          </div>
+            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+          </motion.div>
         </div>
 
-        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-      </motion.div>
-
-      {/* 11. AI INTELLIGENCE BRIEFING CARD (Gemini 3.8 Flash Backend) */}
-      <motion.div
-        whileHover={{ y: -2, scale: 1.008 }}
-        transition={{ duration: 0.2 }}
-        className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-pink-400" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-purple-300">
-              AI Daily Intelligence
-            </h3>
-          </div>
-
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={handleGenerateBriefing}
-            disabled={isBriefingLoading}
-            className="px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-pink-300 border border-purple-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+        {/* RIGHT COLUMN: AI Intelligence, Tasks, Habits & Calendar */}
+        <div className="lg:col-span-6 space-y-4 sm:space-y-5">
+          {/* AI INTELLIGENCE BRIEFING CARD (Gemini 3.8 Flash Backend) */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
           >
-            <RefreshCw className={`w-3 h-3 text-pink-400 ${isBriefingLoading ? 'animate-spin' : ''}`} />
-            <span>{isBriefingLoading ? 'Generating...' : briefing ? 'Refresh' : 'Get Briefing'}</span>
-          </motion.button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-pink-400" />
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-purple-300">
+                  AI Daily Intelligence
+                </h3>
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.94 }}
+                onClick={handleGenerateBriefing}
+                disabled={isBriefingLoading}
+                className="px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-pink-300 border border-purple-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 text-pink-400 ${isBriefingLoading ? 'animate-spin' : ''}`} />
+                <span>{isBriefingLoading ? 'Generating...' : briefing ? 'Refresh' : 'Get Briefing'}</span>
+              </motion.button>
+            </div>
+
+            {briefing ? (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-2.5 pt-0.5 text-xs text-slate-200"
+                >
+                  <p className="font-semibold text-white leading-relaxed">
+                    {briefing.greeting}
+                  </p>
+                  <div className="p-3 rounded-2xl bg-[#120e21] border border-white/[0.06] space-y-1">
+                    <span className="text-[10px] uppercase font-mono font-bold text-pink-400 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      <span>Key Priorities</span>
+                    </span>
+                    <ul className="space-y-0.5 text-xs text-slate-300">
+                      {briefing.priorities.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-pink-400 font-bold">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="text-[11px] text-purple-300/90 font-medium">
+                    💡 {briefing.healthInsight}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Synthesize your tasks, WatchOS health metrics, and knowledge vault with Gemini 3.8 Flash.
+              </p>
+            )}
+          </motion.div>
+
+          {/* TODAY'S TASKS CARD */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3.5"
+          >
+            <div 
+              onClick={() => setActiveTab('tasks')}
+              className="flex items-center justify-between cursor-pointer group"
+            >
+              <div className="flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-fuchsia-400" />
+                <h3 className="text-base font-extrabold text-white tracking-tight group-hover:text-pink-300 transition-colors">
+                  Tasks & Reminders
+                </h3>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">
+                {completedTasks.length} of {activeTasks.length || 5} completed
+              </span>
+              <span className="text-sm font-extrabold text-purple-300 font-mono">
+                {completionPercent}%
+              </span>
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-[#221b38] overflow-hidden p-0.5">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${completionPercent}%` }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {activeTasks.slice(0, 3).map((task) => (
+                <motion.div
+                  key={task.id}
+                  whileHover={{ x: 3 }}
+                  onClick={() => handleToggleTask(task)}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-[#130f21] hover:bg-[#1b152e] border border-white/[0.04] hover:border-purple-500/30 cursor-pointer transition-all"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors shrink-0 ${
+                      task.isCompleted
+                        ? 'bg-gradient-to-tr from-purple-500 to-pink-500 text-white'
+                        : 'border-2 border-slate-600 hover:border-pink-400'
+                    }`}>
+                      {task.isCompleted && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+
+                    <p className={`text-xs font-semibold truncate ${
+                      task.isCompleted ? 'line-through text-slate-500' : 'text-slate-200'
+                    }`}>
+                      {task.title}
+                    </p>
+                  </div>
+
+                  <span className="text-[10px] font-mono text-slate-400 shrink-0 pl-2">
+                    {task.dueTime}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* HABIT TRACKER PROGRESS WIDGET (Module 2.I) */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-base font-extrabold text-white tracking-tight">
+                  Habits & Streaks
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-emerald-300 font-mono">
+                {habits.filter(h => h.completedDates?.includes(todayStr)).length} of {habits.length} Done
+              </span>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {habits.map((habit) => {
+                const isCompletedToday = habit.completedDates?.includes(todayStr)
+                return (
+                  <motion.div
+                    key={habit.id}
+                    whileHover={{ x: 2 }}
+                    onClick={() => handleToggleHabit(habit.id)}
+                    className="flex items-center justify-between p-3 rounded-2xl bg-[#130f21] hover:bg-[#1a142c] border border-white/[0.04] hover:border-emerald-500/30 cursor-pointer transition-all"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                        isCompletedToday
+                          ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                          : 'border-2 border-slate-600 hover:border-emerald-400'
+                      }`}>
+                        {isCompletedToday && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+
+                      <span className={`text-xs font-semibold truncate ${
+                        isCompletedToday ? 'line-through text-slate-400' : 'text-slate-200'
+                      }`}>
+                        {habit.title}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                      <span className="text-xs font-mono font-bold text-amber-400">
+                        🔥 {habit.streakCount}
+                      </span>
+                      <span className="text-[10px] text-slate-400">days</span>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </motion.div>
+
+          {/* TODAY'S SCHEDULE & SMART CALENDAR (Module 2.E) */}
+          <motion.div
+            whileHover={{ y: -2, scale: 1.008 }}
+            transition={{ duration: 0.2 }}
+            className="p-5 sm:p-6 rounded-3xl bg-[#161224]/90 border border-white/[0.08] shadow-xl space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-400" />
+                <h3 className="text-base font-extrabold text-white tracking-tight">
+                  Today's Schedule
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-slate-400 font-mono">
+                {calendarEvents.length} Events
+              </span>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {calendarEvents.length > 0 ? (
+                calendarEvents.map((evt) => {
+                  const categoryColor = 
+                    evt.category === 'class' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' :
+                    evt.category === 'deadline' ? 'bg-rose-500/10 text-rose-300 border-rose-500/30' :
+                    evt.category === 'meeting' ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' :
+                    'bg-sky-500/10 text-sky-300 border-sky-500/30'
+
+                  return (
+                    <div
+                      key={evt.id}
+                      className="p-3 rounded-2xl bg-[#130f21] border border-white/[0.04] flex items-center justify-between"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate">{evt.title}</span>
+                          <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-md font-mono border ${categoryColor}`}>
+                            {evt.category}
+                          </span>
+                        </div>
+                        {evt.location && (
+                          <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 truncate">
+                            <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                            <span>{evt.location}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <span className="text-xs font-mono font-bold text-purple-300 shrink-0">
+                        {evt.startTime}
+                      </span>
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="text-xs text-slate-400 py-1">No calendar events scheduled for today.</p>
+              )}
+            </div>
+          </motion.div>
         </div>
 
-        {briefing ? (
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-2.5 pt-0.5 text-xs text-slate-200"
-            >
-              <p className="font-semibold text-white leading-relaxed">
-                {briefing.greeting}
-              </p>
-              <div className="p-3 rounded-2xl bg-[#120e21] border border-white/[0.06] space-y-1">
-                <span className="text-[10px] uppercase font-mono font-bold text-pink-400 flex items-center gap-1">
-                  <Zap className="w-3 h-3" />
-                  <span>Key Priorities</span>
-                </span>
-                <ul className="space-y-0.5 text-xs text-slate-300">
-                  {briefing.priorities.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-1.5">
-                      <span className="text-pink-400 font-bold">•</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <p className="text-[11px] text-purple-300/90 font-medium">
-                💡 {briefing.healthInsight}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        ) : (
-          <p className="text-xs text-slate-400">
-            Synthesize your tasks, WatchOS health metrics, and knowledge vault with Gemini 3.8 Flash.
-          </p>
-        )}
-      </motion.div>
+      </div>
 
       {/* QUICK MODALS FOR DASHBOARD SHORTCUTS */}
       <AnimatePresence>

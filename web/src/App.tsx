@@ -319,7 +319,7 @@ export function App() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setViewMode('landing')}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#140e29]/70 hover:bg-purple-900/30 border border-purple-500/20 text-xs font-semibold text-purple-300 hover:text-white transition-all shadow-inner"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl bg-[#140e29]/70 hover:bg-purple-900/30 border border-purple-500/20 text-xs font-semibold text-purple-300 hover:text-white transition-all shadow-inner shrink-0"
               title="Return to WristOS Portal Homepage"
             >
               <Globe className="w-3.5 h-3.5 text-pink-400" />
@@ -327,7 +327,7 @@ export function App() {
             </motion.button>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Theme Mode Toggle (Sun / Moon) */}
             <motion.button
               whileTap={{ scale: 0.92 }}
@@ -347,17 +347,6 @@ export function App() {
             >
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#ec4899]" />
-            </motion.button>
-
-            {/* Quick Landing Page link */}
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => setViewMode('landing')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white transition-all"
-              title="Return to Product Showcase"
-            >
-              <Globe className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">Showcase</span>
             </motion.button>
 
             {/* Profile Avatar / User Chip */}

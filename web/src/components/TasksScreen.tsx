@@ -264,7 +264,7 @@ export function TasksScreen() {
   })
 
   return (
-    <div className="space-y-5 max-w-md mx-auto pb-8">
+    <div className="space-y-5 max-w-4xl mx-auto pb-8">
       
       {/* Toast Notification */}
       <AnimatePresence>
