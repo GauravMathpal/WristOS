@@ -295,12 +295,12 @@ export function LandingPage() {
       {/* 1. FIXED TOP HEADER NAVIGATION                               */}
       {/* ============================================================ */}
       <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#07060c]/90 border-b border-purple-500/15 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-3.5 sm:px-8 py-3 gap-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 gap-2">
           
           <DualBrandHeader version="v1.16" onClick={() => setViewMode('landing')} />
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 lg:gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.08] text-xs font-semibold text-slate-300 backdrop-blur-md">
+          {/* Desktop Navigation Links (Shown on XL screens >= 1280px) */}
+          <nav className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.08] text-xs font-semibold text-slate-300 backdrop-blur-md shrink-0">
             <a href="#hero" className="px-2.5 py-1 rounded-lg hover:text-white hover:bg-white/[0.06] transition-all">Overview</a>
             <a href="#firmware" className="px-2.5 py-1 rounded-lg hover:text-white hover:bg-white/[0.06] transition-all">Watch OS</a>
             <a href="#modules" className="px-2.5 py-1 rounded-lg hover:text-white hover:bg-white/[0.06] transition-all">App Modules</a>
@@ -314,7 +314,7 @@ export function LandingPage() {
             {/* BLE Pair Shortcut Button */}
             <button
               onClick={() => isConnected ? {} : connectWatch()}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition-all shrink-0 ${
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition-all shrink-0 ${
                 isConnected
                   ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300 shadow-md shadow-emerald-900/30'
                   : 'border-purple-500/30 bg-purple-950/30 text-purple-300 hover:bg-purple-900/40 hover:text-white'
@@ -331,11 +331,11 @@ export function LandingPage() {
                     setViewMode('app')
                     setActiveTab('profile')
                   }}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-medium text-purple-200 hover:border-purple-400 hover:text-white transition-all shrink-0"
+                  className="hidden sm:flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-medium text-purple-200 hover:border-purple-400 hover:text-white transition-all shrink-0"
                   title="Your Personal Profile"
                 >
                   <div className={`w-4 h-4 rounded-full bg-gradient-to-tr ${currentUser.avatarColor}`} />
-                  <span className="hidden sm:inline font-mono">{currentUser.name.split(' ')[0]}</span>
+                  <span className="font-mono">{currentUser.name.split(' ')[0]}</span>
                 </button>
 
                 <button
@@ -346,12 +346,13 @@ export function LandingPage() {
                   className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all shrink-0"
                 >
                   <Zap className="w-3.5 h-3.5 fill-white" />
-                  <span>Dashboard</span>
+                  <span className="hidden xs:inline">Dashboard</span>
+                  <span className="xs:hidden">App</span>
                 </button>
 
                 <button
                   onClick={logoutUser}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 text-xs font-semibold transition-all shrink-0"
+                  className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 text-xs font-semibold transition-all shrink-0"
                   title="Sign Out"
                 >
                   <LogOut className="w-3 h-3" />
@@ -362,7 +363,7 @@ export function LandingPage() {
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   onClick={() => setViewMode('login')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-bold text-purple-200 hover:border-purple-400 hover:text-white transition-all shadow-md shrink-0"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl border border-purple-500/30 bg-[#140e2b] text-xs font-bold text-purple-200 hover:border-purple-400 hover:text-white transition-all shadow-md shrink-0"
                 >
                   <User className="w-3.5 h-3.5 text-purple-400" />
                   <span>Sign In</span>
@@ -373,17 +374,17 @@ export function LandingPage() {
                   className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all shrink-0"
                 >
                   <Zap className="w-3.5 h-3.5 fill-white" />
-                  <span className="hidden sm:inline">Get Started</span>
-                  <span className="sm:hidden">Start</span>
+                  <span className="hidden xs:inline">Get Started</span>
+                  <span className="xs:hidden">Start</span>
                 </button>
               </div>
             )}
 
-            {/* Mobile Hamburger Toggle Button */}
+            {/* Mobile / Tablet Hamburger Toggle Button (Shown below XL screens) */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(prev => !prev)}
-              className="md:hidden p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white transition-colors shrink-0"
+              className="xl:hidden p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white transition-colors shrink-0"
               aria-label={mobileMenuOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
             >
               {mobileMenuOpen ? <X className="w-4 h-4 text-pink-400" /> : <Menu className="w-4 h-4 text-purple-300" />}
@@ -391,7 +392,7 @@ export function LandingPage() {
           </div>
         </div>
 
-        {/* Mobile Navigation Dropdown Drawer */}
+        {/* Mobile / Tablet Navigation Dropdown Drawer */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
@@ -399,9 +400,9 @@ export function LandingPage() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.22, ease: 'easeInOut' }}
-              className="md:hidden overflow-hidden border-t border-purple-500/15 bg-[#07060c]/98 backdrop-blur-3xl px-4 py-4 space-y-3 shadow-2xl"
+              className="xl:hidden overflow-hidden border-t border-purple-500/15 bg-[#07060c]/98 backdrop-blur-3xl px-4 py-4 space-y-3 shadow-2xl"
             >
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <a 
                   href="#hero" 
                   onClick={() => setMobileMenuOpen(false)}
@@ -513,31 +514,31 @@ export function LandingPage() {
       {/* ============================================================ */}
       {/* 2. HERO SECTION                                              */}
       {/* ============================================================ */}
-      <section id="hero" className="relative pt-20 pb-16 px-4 sm:px-8 max-w-6xl mx-auto text-center z-10">
-        <div className="space-y-6 max-w-4xl mx-auto">
+      <section id="hero" className="relative pt-12 sm:pt-20 pb-12 sm:pb-16 px-3.5 sm:px-8 max-w-6xl mx-auto text-center z-10 overflow-hidden">
+        <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto">
           
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/40 backdrop-blur-xl text-purple-300 text-xs font-mono font-semibold shadow-lg shadow-purple-950/40">
-            <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-            <span>OPEN-SOURCE WEARABLE OS & AMBIENT INTELLIGENCE</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+          <div className="inline-flex max-w-full items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/40 backdrop-blur-xl text-purple-300 text-[10px] sm:text-xs font-mono font-semibold shadow-lg shadow-purple-950/40">
+            <Sparkles className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+            <span className="truncate">OPEN-SOURCE WEARABLE OS & AMBIENT INTELLIGENCE</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] shrink-0" />
           </div>
 
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-white leading-[1.08]">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.1] break-words">
             Your Personal Intelligence,{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-300 drop-shadow-[0_0_30px_rgba(168,85,247,0.4)]">
               On Your Wrist.
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed">
+          <p className="text-sm sm:text-base md:text-lg text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed break-words px-1 sm:px-0">
             A complete wearable intelligence ecosystem uniting <strong className="text-white font-semibold">FreeRTOS 10 & LVGL 7 bare-metal C++17 firmware</strong> on WatchOS hardware with an <strong className="text-purple-300 font-semibold">8-module React 19, Dexie v4, & Gemini AI</strong> companion smartphone application.
           </p>
 
           {/* Quick CTA Actions */}
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-3">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2 sm:pt-3 w-full">
             <button
               onClick={() => handleOpenCompanion('dashboard')}
-              className="flex items-center gap-2.5 px-7 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
+              className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 sm:px-7 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all"
             >
               <Zap className="w-4 h-4 fill-white" />
               <span>{currentUser ? 'Open My Dashboard' : 'Sign In to Dashboard'}</span>
@@ -552,7 +553,7 @@ export function LandingPage() {
                   setViewMode('login')
                 }
               }}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border border-purple-500/40 bg-[#16102c]/80 hover:bg-purple-900/40 text-white font-bold text-sm transition-all hover:scale-105 shadow-md shadow-purple-950/40"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl border border-purple-500/40 bg-[#16102c]/80 hover:bg-purple-900/40 text-white font-bold text-sm transition-all hover:scale-105 shadow-md shadow-purple-950/40"
             >
               <Bluetooth className="w-4 h-4 text-cyan-400" />
               <span>{isConnected ? 'View Connected Watch' : 'Pair Watch via Web Bluetooth'}</span>
@@ -560,7 +561,7 @@ export function LandingPage() {
 
             <a
               href="#downloads"
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 text-slate-200 font-bold text-sm transition-all"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 text-slate-200 font-bold text-sm transition-all"
             >
               <Download className="w-4 h-4 text-emerald-400" />
               <span>Downloads & Binaries</span>
@@ -568,7 +569,7 @@ export function LandingPage() {
           </div>
 
           {/* Telemetry Feature Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-6 pt-6 text-xs text-slate-400 font-mono">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 pt-4 sm:pt-6 text-[11px] sm:text-xs text-slate-400 font-mono">
             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> 10 Native LVGL 7 Screens</span>
             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-purple-400" /> 8 Companion App Modules</span>
             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" /> Multimodal Gemini AI Pipeline</span>
@@ -717,8 +718,8 @@ export function LandingPage() {
         </div>
 
         {/* STICKY QUICK JUMP PILL BAR */}
-        <div className="sticky top-16 z-40 py-3 -mx-4 px-4 sm:-mx-8 sm:px-8 backdrop-blur-2xl bg-[#07060c]/90 border-y border-purple-500/20 mb-12 shadow-2xl">
-          <div className="max-w-6xl mx-auto flex items-center justify-start sm:justify-center gap-2 overflow-x-auto no-scrollbar py-1 text-xs">
+        <div className="sticky top-16 z-40 py-2.5 w-full backdrop-blur-2xl bg-[#07060c]/90 border-y border-purple-500/20 mb-8 sm:mb-12 shadow-2xl">
+          <div className="max-w-6xl mx-auto flex items-center justify-start sm:justify-center gap-2 overflow-x-auto scrollbar-none py-1 px-2 sm:px-4 text-xs">
             {moduleNavItems.map((m) => (
               <button
                 key={m.id}

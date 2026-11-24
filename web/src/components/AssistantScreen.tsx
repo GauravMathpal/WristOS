@@ -64,6 +64,7 @@ export function AssistantScreen() {
   // Speech Recognition instance and silence timer ref
   const recognitionRef = useRef<any>(null)
   const silenceTimeoutRef = useRef<any>(null)
+  const initialSilenceTimeoutRef = useRef<any>(null)
   const accumulatedSpeechRef = useRef<string>('')
   const hasSubmittedSpeechRef = useRef<boolean>(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -104,6 +105,9 @@ export function AssistantScreen() {
       }
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current)
+      }
+      if (initialSilenceTimeoutRef.current) {
+        clearTimeout(initialSilenceTimeoutRef.current)
       }
     }
   }, [])
@@ -203,10 +207,8 @@ export function AssistantScreen() {
     accumulatedSpeechRef.current = ''
     setIsLoading(true)
 
-    // On mobile devices, pivot view mode to 'chat' so the teleprompted thread and AI reply are immediately visible
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-      setMobileViewMode('chat')
-    }
+    // Unconditionally redirect and open the chat view so conversation and AI response are immediately visible
+    setMobileViewMode('chat')
 
     try {
       const pendingTaskTitles = tasks.filter((t: TaskRecord) => !t.isCompleted).map((t: TaskRecord) => t.title)
@@ -259,6 +261,10 @@ export function AssistantScreen() {
       clearTimeout(silenceTimeoutRef.current)
       silenceTimeoutRef.current = null
     }
+    if (initialSilenceTimeoutRef.current) {
+      clearTimeout(initialSilenceTimeoutRef.current)
+      initialSilenceTimeoutRef.current = null
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (_) {}
       recognitionRef.current = null
@@ -268,6 +274,9 @@ export function AssistantScreen() {
     setInput('')
     accumulatedSpeechRef.current = ''
 
+    // Automatically redirect and open the chat section
+    setMobileViewMode('chat')
+
     handleSend(trimmed)
   }
 
@@ -275,6 +284,10 @@ export function AssistantScreen() {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current)
       silenceTimeoutRef.current = null
+    }
+    if (initialSilenceTimeoutRef.current) {
+      clearTimeout(initialSilenceTimeoutRef.current)
+      initialSilenceTimeoutRef.current = null
     }
     if (recognitionRef.current) {
       try {
@@ -340,6 +353,18 @@ export function AssistantScreen() {
         setInterimTranscript('')
         hasSubmittedSpeechRef.current = false
         accumulatedSpeechRef.current = ''
+
+        // Initial silence auto-stop: if user doesn't say anything after 3.5s, auto-stop and redirect to chat
+        if (initialSilenceTimeoutRef.current) {
+          clearTimeout(initialSilenceTimeoutRef.current)
+        }
+        initialSilenceTimeoutRef.current = setTimeout(() => {
+          if (!hasSubmittedSpeechRef.current && !accumulatedSpeechRef.current.trim()) {
+            stopListening()
+            // Automatically redirect and open the chat section
+            setMobileViewMode('chat')
+          }
+        }, 3500)
       }
 
       // @ts-expect-error speech event
@@ -359,17 +384,23 @@ export function AssistantScreen() {
         const candidateText = (finalChunk + interimChunk).trim()
 
         if (candidateText) {
+          // Clear initial silence timer since user spoke
+          if (initialSilenceTimeoutRef.current) {
+            clearTimeout(initialSilenceTimeoutRef.current)
+            initialSilenceTimeoutRef.current = null
+          }
+
           accumulatedSpeechRef.current = candidateText
           setInterimTranscript(candidateText)
           setInput(candidateText)
 
-          // Auto-submit after 1.4s of silence after capturing candidate speech
+          // Auto-submit after 1.5s of silence after speech pause
           if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current)
           }
           silenceTimeoutRef.current = setTimeout(() => {
             commitVoiceSubmission(accumulatedSpeechRef.current)
-          }, 1400)
+          }, 1500)
         }
       }
 
@@ -380,7 +411,9 @@ export function AssistantScreen() {
           setIsListening(false)
           setMicError("Microphone permission blocked. Click the microphone/lock icon in your browser URL bar and choose 'Allow', then click the mic button again.")
         } else if (event.error === 'no-speech') {
-          // Keep listening for natural pause
+          // When recognition reports no-speech, stop and redirect to chat
+          stopListening()
+          setMobileViewMode('chat')
         } else if (event.error === 'network') {
           setIsListening(false)
           setMicError("Speech recognition network timeout. You can speak again, type, or click the quick voice presets below.")
@@ -393,9 +426,16 @@ export function AssistantScreen() {
       recognition.onend = () => {
         setIsListening(false)
         recognitionRef.current = null
+        if (initialSilenceTimeoutRef.current) {
+          clearTimeout(initialSilenceTimeoutRef.current)
+          initialSilenceTimeoutRef.current = null
+        }
         // If recognition ended naturally with unsubmitted speech, submit it!
         if (accumulatedSpeechRef.current.trim() && !hasSubmittedSpeechRef.current) {
           commitVoiceSubmission(accumulatedSpeechRef.current)
+        } else {
+          // Redirect to chat section
+          setMobileViewMode('chat')
         }
       }
 
@@ -415,6 +455,8 @@ export function AssistantScreen() {
         commitVoiceSubmission(speechToCommit)
       } else {
         stopListening()
+        // Manually stopped with no speech: redirect and open chat section
+        setMobileViewMode('chat')
       }
     } else {
       startListening()
@@ -457,7 +499,7 @@ export function AssistantScreen() {
   const orbState = isListening ? 'listening' : isLoading ? 'thinking' : isSpeaking ? 'speaking' : 'idle'
 
   return (
-    <div className="w-full max-w-6xl mx-auto h-[calc(100vh-7.8rem)] flex flex-col space-y-4 pb-4">
+    <div className="w-full max-w-6xl mx-auto flex-1 min-h-[calc(100dvh-10rem)] lg:h-[calc(100vh-8.5rem)] flex flex-col space-y-3 sm:space-y-4 pb-2 sm:pb-4">
       
       {/* 1. TOP HEADER & MOBILE SWITCHER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-[#140e29]/75 border border-purple-500/20 backdrop-blur-xl shadow-lg shrink-0">

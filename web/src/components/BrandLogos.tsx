@@ -130,23 +130,23 @@ export function WristOSBrandHeader({
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center gap-2.5 sm:gap-3 ${onClick ? 'cursor-pointer group' : ''}`}
+      className={`flex items-center gap-2 sm:gap-2.5 shrink-0 ${onClick ? 'cursor-pointer group' : ''}`}
     >
       {/* 1. Main WristOS Logo Mark */}
-      <WristOSLogoIcon size={34} className="group-hover:scale-105 transition-transform" />
+      <WristOSLogoIcon size={30} className="group-hover:scale-105 transition-transform" />
 
       {/* 2. WristOS Wordmark & Version Pill */}
       <div className="flex flex-col">
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <span className="font-extrabold text-sm sm:text-base tracking-tight text-white group-hover:text-purple-300 transition-colors">
             WristOS
           </span>
-          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 hidden xs:inline-block">
             {version}
           </span>
         </div>
         {showTagline && (
-          <p className="text-[10px] text-slate-400 hidden sm:block font-medium truncate max-w-[220px]">
+          <p className="text-[10px] text-slate-400 hidden sm:block font-medium truncate max-w-[200px]">
             Wearable OS & Ambient AI
           </p>
         )}

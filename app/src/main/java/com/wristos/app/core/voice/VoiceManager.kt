@@ -21,6 +21,8 @@ class VoiceManager(context: Context) {
 
     // Speech to Text
     private var speechRecognizer: SpeechRecognizer? = null
+    private var silenceRunnable: Runnable? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -62,8 +64,19 @@ class VoiceManager(context: Context) {
         if (!enabled) stopSpeaking()
     }
 
+    private fun cancelSilenceTimer() {
+        silenceRunnable?.let { mainHandler.removeCallbacks(it) }
+        silenceRunnable = null
+    }
+
+    private fun resetSilenceTimer(delayMs: Long, onTimeout: () -> Unit) {
+        cancelSilenceTimer()
+        val runnable = Runnable { onTimeout() }
+        silenceRunnable = runnable
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
     fun startListening(onResult: (String) -> Unit) {
-        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         mainHandler.post {
             try {
                 // Check microphone permission before calling SpeechRecognizer
@@ -87,6 +100,7 @@ class VoiceManager(context: Context) {
                 _errorMessage.value = null
                 _speechText.value = ""
                 stopSpeaking()
+                cancelSilenceTimer()
                 speechRecognizer?.destroy()
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
 
@@ -101,17 +115,26 @@ class VoiceManager(context: Context) {
                     override fun onReadyForSpeech(params: Bundle?) {
                         _isListening.value = true
                         _errorMessage.value = null
+                        // Silence timer: if no speech is heard within 4 seconds, auto-stop
+                        resetSilenceTimer(4000L) {
+                            android.util.Log.d("VoiceManager", "Auto-stopping voice input due to initial silence")
+                            stopListening()
+                        }
                     }
 
-                    override fun onBeginningOfSpeech() {}
+                    override fun onBeginningOfSpeech() {
+                        cancelSilenceTimer()
+                    }
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
 
                     override fun onEndOfSpeech() {
+                        cancelSilenceTimer()
                         _isListening.value = false
                     }
 
                     override fun onError(error: Int) {
+                        cancelSilenceTimer()
                         android.util.Log.w("VoiceManager", "SpeechRecognizer error: $error")
                         val errorDesc = when (error) {
                             SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
@@ -119,10 +142,10 @@ class VoiceManager(context: Context) {
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission not granted"
                             SpeechRecognizer.ERROR_NETWORK -> "Network connection error for speech"
                             SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-                            SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized. Please try again."
+                            SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized. Tap mic to retry."
                             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy. Please wait a moment."
                             SpeechRecognizer.ERROR_SERVER -> "Google speech server error"
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input detected. Tap mic to speak."
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap mic to speak."
                             else -> "Speech recognition error ($error)"
                         }
                         _errorMessage.value = errorDesc
@@ -130,19 +153,31 @@ class VoiceManager(context: Context) {
                     }
 
                     override fun onResults(results: Bundle?) {
+                        cancelSilenceTimer()
                         _isListening.value = false
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             val recognized = matches[0]
                             _speechText.value = recognized
                             onResult(recognized)
+                        } else if (_speechText.value.isNotBlank()) {
+                            onResult(_speechText.value)
                         }
                     }
 
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
-                            _speechText.value = matches[0]
+                            val text = matches[0]
+                            _speechText.value = text
+                            // Inter-speech silence timer: auto-commit if user stops talking for 1.8s
+                            resetSilenceTimer(1800L) {
+                                android.util.Log.d("VoiceManager", "Auto-committing voice after pause")
+                                stopListening()
+                                if (_speechText.value.isNotBlank()) {
+                                    onResult(_speechText.value)
+                                }
+                            }
                         }
                     }
 
@@ -151,6 +186,7 @@ class VoiceManager(context: Context) {
 
                 speechRecognizer?.startListening(intent)
             } catch (e: Exception) {
+                cancelSilenceTimer()
                 android.util.Log.e("VoiceManager", "Failed to start speech recognition", e)
                 _errorMessage.value = "Voice input error: ${e.localizedMessage ?: "Unknown"}"
                 _isListening.value = false
@@ -159,11 +195,13 @@ class VoiceManager(context: Context) {
     }
 
     fun stopListening() {
+        cancelSilenceTimer()
         speechRecognizer?.stopListening()
         _isListening.value = false
     }
 
     fun destroy() {
+        cancelSilenceTimer()
         speechRecognizer?.destroy()
         textToSpeech?.stop()
         textToSpeech?.shutdown()
