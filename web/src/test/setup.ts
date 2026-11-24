@@ -47,3 +47,6 @@ class MockAudioContext {
 window.AudioContext = MockAudioContext
 // @ts-expect-error Mock webkitAudioContext
 window.webkitAudioContext = MockAudioContext
+
+// Mock scrollIntoView for jsdom
+window.HTMLElement.prototype.scrollIntoView = function() {}

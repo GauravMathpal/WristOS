@@ -22,7 +22,8 @@ import {
   Radio,
   Square,
   RadioTower,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { BreathingOrb } from './BreathingOrb'
@@ -57,10 +58,14 @@ export function AssistantScreen() {
 
   // Mobile mode switcher: 'orb' (Holographic Voice Center) or 'chat' (Full conversation stream)
   const [mobileViewMode, setMobileViewMode] = useState<'orb' | 'chat'>('orb')
+  const [lastSubmittedPrompt, setLastSubmittedPrompt] = useState<string>('')
+  const [lastAssistantReply, setLastAssistantReply] = useState<string | null>(null)
 
   // Speech Recognition instance and silence timer ref
   const recognitionRef = useRef<any>(null)
   const silenceTimeoutRef = useRef<any>(null)
+  const accumulatedSpeechRef = useRef<string>('')
+  const hasSubmittedSpeechRef = useRef<boolean>(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Web Audio chime synthesizer
@@ -149,7 +154,7 @@ export function AssistantScreen() {
   ])
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    chatEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [messages, isLoading])
 
   const speak = (text: string) => {
@@ -174,6 +179,98 @@ export function AssistantScreen() {
     }
   }
 
+  const handleSend = async (manualText?: string) => {
+    const textToSend = (manualText !== undefined ? manualText : input).trim()
+    if (!textToSend || isLoading) return
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
+
+    setLastSubmittedPrompt(textToSend)
+
+    const userMessage: Message = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      text: textToSend,
+      timestamp: Date.now()
+    }
+
+    setMessages((prev) => [...prev.map(m => ({ ...m, isNew: false })), userMessage])
+    setInput('')
+    setInterimTranscript('')
+    accumulatedSpeechRef.current = ''
+    setIsLoading(true)
+
+    // On mobile devices, pivot view mode to 'chat' so the teleprompted thread and AI reply are immediately visible
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setMobileViewMode('chat')
+    }
+
+    try {
+      const pendingTaskTitles = tasks.filter((t: TaskRecord) => !t.isCompleted).map((t: TaskRecord) => t.title)
+      const memoryFacts = memories.map((m: MemoryRecord) => `${m.tag}: ${m.fact}`)
+
+      const parsedReply = await queryAssistant({
+        prompt: textToSend,
+        memories: memoryFacts,
+        tasks: pendingTaskTitles
+      })
+
+      let actionBadge: string | undefined = undefined
+
+      if (parsedReply.action.type === 'TASK' && parsedReply.action.task) {
+        await taskRepository.add(parsedReply.action.task.title, parsedReply.action.task.dueTime)
+        actionBadge = `Added to Agenda: "${parsedReply.action.task.title}"`
+      } else if (parsedReply.action.type === 'MEMORY' && parsedReply.action.memory) {
+        await memoryRepository.add(parsedReply.action.memory.tag, parsedReply.action.memory.fact)
+        actionBadge = `Vault Saved: [${parsedReply.action.memory.tag}]`
+      } else if (parsedReply.action.type === 'ALERT' && parsedReply.action.alert) {
+        useAppStore.getState().sendWatchAlert(parsedReply.action.alert.message)
+        actionBadge = `Watch Alert Dispatched: "${parsedReply.action.alert.message}"`
+      }
+
+      const aiMessage: Message = {
+        id: `ai-${Date.now()}`,
+        role: 'assistant',
+        text: parsedReply.cleanText,
+        actionBadge,
+        timestamp: Date.now(),
+        isNew: true
+      }
+
+      setLastAssistantReply(parsedReply.cleanText)
+      setMessages((prev) => [...prev, aiMessage])
+      speak(parsedReply.cleanText)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const commitVoiceSubmission = (speechText: string) => {
+    const trimmed = speechText.trim()
+    if (!trimmed || hasSubmittedSpeechRef.current) return
+    hasSubmittedSpeechRef.current = true
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (_) {}
+      recognitionRef.current = null
+    }
+    setIsListening(false)
+    setInterimTranscript('')
+    setInput('')
+    accumulatedSpeechRef.current = ''
+
+    handleSend(trimmed)
+  }
+
   const stopListening = () => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current)
@@ -181,16 +278,20 @@ export function AssistantScreen() {
     }
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop()
+        recognitionRef.current.abort()
       } catch (_) {}
       recognitionRef.current = null
     }
     setIsListening(false)
     setInterimTranscript('')
+    accumulatedSpeechRef.current = ''
   }
 
   const startListening = async () => {
     setMicError(null)
+    hasSubmittedSpeechRef.current = false
+    accumulatedSpeechRef.current = ''
+    setInterimTranscript('')
 
     // 1. Proactively request microphone audio permissions if browser requires it
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -237,42 +338,38 @@ export function AssistantScreen() {
         setIsListening(true)
         setMicError(null)
         setInterimTranscript('')
+        hasSubmittedSpeechRef.current = false
+        accumulatedSpeechRef.current = ''
       }
 
       // @ts-expect-error speech event
       recognition.onresult = (event) => {
-        let currentInterim = ''
-        let currentFinal = ''
+        let finalChunk = ''
+        let interimChunk = ''
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           const item = event.results[i]
           if (item.isFinal) {
-            currentFinal += item[0].transcript
+            finalChunk += item[0].transcript + ' '
           } else {
-            currentInterim += item[0].transcript
+            interimChunk += item[0].transcript
           }
         }
 
-        const candidateText = (currentFinal || currentInterim).trim()
+        const candidateText = (finalChunk + interimChunk).trim()
 
         if (candidateText) {
+          accumulatedSpeechRef.current = candidateText
           setInterimTranscript(candidateText)
           setInput(candidateText)
 
-          // Auto-submit after 1.6s of silence after capturing candidate speech
+          // Auto-submit after 1.4s of silence after capturing candidate speech
           if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current)
           }
           silenceTimeoutRef.current = setTimeout(() => {
-            const finalSpeech = candidateText
-            setIsListening(false)
-            setInterimTranscript('')
-            if (recognitionRef.current) {
-              try { recognitionRef.current.stop() } catch (_) {}
-              recognitionRef.current = null
-            }
-            handleSend(finalSpeech)
-          }, 1600)
+            commitVoiceSubmission(accumulatedSpeechRef.current)
+          }, 1400)
         }
       }
 
@@ -296,6 +393,10 @@ export function AssistantScreen() {
       recognition.onend = () => {
         setIsListening(false)
         recognitionRef.current = null
+        // If recognition ended naturally with unsubmitted speech, submit it!
+        if (accumulatedSpeechRef.current.trim() && !hasSubmittedSpeechRef.current) {
+          commitVoiceSubmission(accumulatedSpeechRef.current)
+        }
       }
 
       recognition.start()
@@ -309,7 +410,12 @@ export function AssistantScreen() {
 
   const toggleMic = () => {
     if (isListening) {
-      stopListening()
+      const speechToCommit = accumulatedSpeechRef.current.trim() || interimTranscript.trim() || input.trim()
+      if (speechToCommit) {
+        commitVoiceSubmission(speechToCommit)
+      } else {
+        stopListening()
+      }
     } else {
       startListening()
     }
@@ -320,72 +426,12 @@ export function AssistantScreen() {
     setIsListening(true)
     setInterimTranscript(command)
     setInput(command)
+    accumulatedSpeechRef.current = command
     setTimeout(() => {
       setIsListening(false)
       setInterimTranscript('')
-      handleSend(command)
+      commitVoiceSubmission(command)
     }, 450)
-  }
-
-  const handleSend = async (manualText?: string) => {
-    const textToSend = manualText || input
-    if (!textToSend.trim() || isLoading) return
-
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current)
-      silenceTimeoutRef.current = null
-    }
-
-    const userMessage: Message = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      text: textToSend.trim(),
-      timestamp: Date.now()
-    }
-
-    setMessages((prev) => [...prev.map(m => ({ ...m, isNew: false })), userMessage])
-    setInput('')
-    setIsLoading(true)
-
-    try {
-      const pendingTaskTitles = tasks.filter((t: TaskRecord) => !t.isCompleted).map((t: TaskRecord) => t.title)
-      const memoryFacts = memories.map((m: MemoryRecord) => `${m.tag}: ${m.fact}`)
-
-      const parsedReply = await queryAssistant({
-        prompt: textToSend.trim(),
-        memories: memoryFacts,
-        tasks: pendingTaskTitles
-      })
-
-      let actionBadge: string | undefined = undefined
-
-      if (parsedReply.action.type === 'TASK' && parsedReply.action.task) {
-        await taskRepository.add(parsedReply.action.task.title, parsedReply.action.task.dueTime)
-        actionBadge = `Added to Agenda: "${parsedReply.action.task.title}"`
-      } else if (parsedReply.action.type === 'MEMORY' && parsedReply.action.memory) {
-        await memoryRepository.add(parsedReply.action.memory.tag, parsedReply.action.memory.fact)
-        actionBadge = `Vault Saved: [${parsedReply.action.memory.tag}]`
-      } else if (parsedReply.action.type === 'ALERT' && parsedReply.action.alert) {
-        useAppStore.getState().sendWatchAlert(parsedReply.action.alert.message)
-        actionBadge = `Watch Alert Dispatched: "${parsedReply.action.alert.message}"`
-      }
-
-      const aiMessage: Message = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        text: parsedReply.cleanText,
-        actionBadge,
-        timestamp: Date.now(),
-        isNew: true
-      }
-
-      setMessages((prev) => [...prev, aiMessage])
-      speak(parsedReply.cleanText)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   const handleClearMessages = () => {
@@ -625,27 +671,100 @@ export function AssistantScreen() {
               ))}
             </div>
 
-            {/* Real-time Interim Speech Transcript HUD */}
-            <AnimatePresence>
-              {isListening && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="px-4 py-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs font-mono max-w-xs truncate shadow-[0_0_15px_rgba(244,63,94,0.3)]"
-                >
-                  <span className="text-rose-400 font-bold mr-1.5">●</span>
-                  {interimTranscript ? `"${interimTranscript}"` : "Waiting for speech..."}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Live Teleprompter HUD & Voice Bridge */}
+            <div className="w-full max-w-sm mx-auto">
+              <AnimatePresence mode="wait">
+                {isListening ? (
+                  <motion.div
+                    key="teleprompter-listening"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    className="p-3.5 rounded-2xl bg-gradient-to-r from-rose-500/20 via-pink-500/15 to-purple-500/20 border border-rose-500/40 text-left shadow-[0_0_20px_rgba(244,63,94,0.2)] backdrop-blur-xl"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-rose-300 font-bold flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+                        Live Voice Teleprompter
+                      </span>
+                      <span className="text-[10px] text-pink-300/80 font-medium font-mono">Auto-submits on pause</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-white font-medium italic break-words min-h-[1.5rem]">
+                      {interimTranscript ? `"${interimTranscript}"` : "Listening... Speak your request"}
+                    </p>
+                    {interimTranscript && (
+                      <div className="mt-2.5 pt-2 border-t border-rose-500/20 flex items-center justify-between">
+                        <span className="text-[10px] text-rose-300/70 font-mono">1.4s silence auto-sends</span>
+                        <button
+                          type="button"
+                          onClick={() => commitVoiceSubmission(accumulatedSpeechRef.current || interimTranscript)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/30 hover:bg-emerald-500/50 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                        >
+                          <Send className="w-3 h-3 text-emerald-300" />
+                          <span>Teleprompt Now</span>
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                ) : isLoading ? (
+                  <motion.div
+                    key="teleprompter-loading"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    className="p-3.5 rounded-2xl bg-[#1b1238]/90 border border-purple-500/30 text-left shadow-lg backdrop-blur-xl"
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-pink-400 animate-spin" />
+                      <span className="text-[10px] font-mono text-purple-300 uppercase tracking-wider font-bold">
+                        Teleprompted to AI Chat
+                      </span>
+                    </div>
+                    {lastSubmittedPrompt && (
+                      <p className="text-xs text-purple-200 line-clamp-2 italic font-medium">
+                        "{lastSubmittedPrompt}"
+                      </p>
+                    )}
+                    <div className="mt-2 flex items-center gap-2 text-[11px] text-cyan-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                      <span>Synthesizing Gemini 3.8 Flash reply...</span>
+                    </div>
+                  </motion.div>
+                ) : lastAssistantReply ? (
+                  <motion.div
+                    key="teleprompter-reply"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    className="p-3.5 rounded-2xl bg-[#140e29]/90 border border-purple-500/20 text-left shadow-lg backdrop-blur-xl"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider font-bold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                        AI Response
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMobileViewMode('chat')}
+                        className="text-[10px] text-purple-300 hover:text-white font-medium underline"
+                      >
+                        Open Chat ({messages.length}) →
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed">
+                      {lastAssistantReply}
+                    </p>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Tactile Microphone & Watch Wake Controls */}
           <div className="space-y-4 pt-3 border-t border-white/[0.06] relative z-10">
             
             {/* Big Tactile Glowing Mic Button */}
-            <div className="flex items-center justify-center gap-5">
+            <div className="flex items-center justify-center gap-4">
               <motion.button
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
@@ -666,7 +785,7 @@ export function AssistantScreen() {
                     ? 'bg-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.9),0_0_60px_rgba(244,63,94,0.5)]'
                     : 'bg-gradient-to-tr from-purple-600 via-fuchsia-600 to-pink-500 shadow-[0_0_35px_rgba(236,72,153,0.7),0_0_60px_rgba(168,85,247,0.4)]'
                 }`}
-                title={isListening ? "Stop listening" : "Click to speak voice command"}
+                title={isListening ? "Click to finish & send voice command" : "Click to speak voice command"}
               >
                 {/* Pulsating halo */}
                 <motion.div
@@ -678,6 +797,29 @@ export function AssistantScreen() {
                 />
                 {isListening ? <MicOff className="w-7 h-7 text-white" /> : <Mic className="w-7 h-7 text-white" />}
               </motion.button>
+
+              {isListening && (
+                <motion.button
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => {
+                    const text = accumulatedSpeechRef.current.trim() || interimTranscript.trim() || input.trim()
+                    if (text) {
+                      commitVoiceSubmission(text)
+                    } else {
+                      stopListening()
+                    }
+                  }}
+                  className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 animate-pulse"
+                  title="Teleprompt speech directly to chat & get reply"
+                >
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Send to Chat</span>
+                </motion.button>
+              )}
             </div>
 
             {/* One-Tap Voice Presets */}
@@ -848,7 +990,16 @@ export function AssistantScreen() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                handleSend()
+                if (isListening) {
+                  const toSubmit = accumulatedSpeechRef.current.trim() || interimTranscript.trim() || input.trim()
+                  if (toSubmit) {
+                    commitVoiceSubmission(toSubmit)
+                  } else {
+                    stopListening()
+                  }
+                } else {
+                  handleSend()
+                }
               }}
               className="relative flex items-center p-2 rounded-2xl border border-purple-500/30 bg-[#0d091e] backdrop-blur-2xl shadow-xl"
             >
@@ -861,7 +1012,7 @@ export function AssistantScreen() {
                     ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_12px_#f43f5e]'
                     : 'bg-purple-500/15 text-pink-300 hover:bg-purple-500/25 border border-purple-500/30'
                 }`}
-                title={isListening ? "Stop listening" : "Click to speak voice command"}
+                title={isListening ? "Finish and send voice command" : "Click to speak voice command"}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </motion.button>
@@ -878,8 +1029,9 @@ export function AssistantScreen() {
                 type="submit"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.92 }}
-                disabled={!input.trim() || isLoading}
+                disabled={(!input.trim() && !interimTranscript.trim()) || isLoading}
                 className="p-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:brightness-110 disabled:opacity-40 transition-all shadow-md shadow-purple-500/30 shrink-0 ml-1"
+                title="Send message to AI assistant"
               >
                 <Send className="w-4 h-4" />
               </motion.button>
