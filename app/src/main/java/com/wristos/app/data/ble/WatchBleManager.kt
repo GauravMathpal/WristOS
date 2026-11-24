@@ -136,15 +136,15 @@ class WatchBleManager(private val context: Context) {
             if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
                 scope.launch {
                     syncCurrentTime(gatt)
-                    kotlinx.coroutines.delay(200)
-                    enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
-                    kotlinx.coroutines.delay(200)
-                    enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
-                    kotlinx.coroutines.delay(200)
+                    kotlinx.coroutines.delay(350)
                     enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
-                    kotlinx.coroutines.delay(200)
+                    kotlinx.coroutines.delay(350)
+                    enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
+                    kotlinx.coroutines.delay(350)
+                    enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
+                    kotlinx.coroutines.delay(350)
                     readBattery(gatt)
-                    kotlinx.coroutines.delay(200)
+                    kotlinx.coroutines.delay(350)
                     readSteps(gatt)
                 }
             }
@@ -339,16 +339,17 @@ class WatchBleManager(private val context: Context) {
         gatt.readCharacteristic(char)
     }
 
-    private fun enableNotifications(gatt: BluetoothGatt, serviceUuid: UUID, charUuid: UUID) {
-        val service = gatt.getService(serviceUuid) ?: return
-        val char = service.getCharacteristic(charUuid) ?: return
+    private fun enableNotifications(gatt: BluetoothGatt, serviceUuid: UUID, charUuid: UUID): Boolean {
+        val service = gatt.getService(serviceUuid) ?: return false
+        val char = service.getCharacteristic(charUuid) ?: return false
 
         gatt.setCharacteristicNotification(char, true)
         val descriptor = char.getDescriptor(BleConstants.CLIENT_CHARACTERISTIC_CONFIG)
         if (descriptor != null) {
             descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            gatt.writeDescriptor(descriptor)
+            return gatt.writeDescriptor(descriptor)
         }
+        return false
     }
 
     private fun handleCharacteristicData(char: BluetoothGattCharacteristic, data: ByteArray? = char.value) {
