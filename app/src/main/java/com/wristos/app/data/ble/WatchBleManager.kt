@@ -1,6 +1,10 @@
 package com.wristos.app.data.ble
 
 import android.annotation.SuppressLint
+import android.app.ActivityOptions
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -10,12 +14,23 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.ParcelUuid
+import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import com.wristos.app.MainActivity
+import com.wristos.app.R
+import com.wristos.app.data.local.SettingsPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,43 +44,88 @@ import java.util.*
 @SuppressLint("MissingPermission")
 class WatchBleManager(private val context: Context) {
 
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    private val appContext = context.applicationContext
+    private val prefs = SettingsPreferences.getInstance(appContext)
+    private val bluetoothManager = appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private val _watchData = MutableStateFlow(WatchData())
+    private val _watchData = MutableStateFlow(
+        WatchData(deviceName = prefs.getLastWatchName() ?: "WristOS Watch")
+    )
     val watchData: StateFlow<WatchData> = _watchData.asStateFlow()
 
-    private val _aiTriggerEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _aiTriggerEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
     val aiTriggerEvent: SharedFlow<Unit> = _aiTriggerEvent.asSharedFlow()
+
+    // Durable token so triggers fired while UI isn't mounted yet are never lost
+    private val _pendingAiTrigger = MutableStateFlow(0L)
+    val pendingAiTrigger: StateFlow<Long> = _pendingAiTrigger.asStateFlow()
 
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
     private var reconnectAttempts = 0
     private var connectionWatchdogJob: Job? = null
+    private var reconnectJob: Job? = null
+    private var periodicSyncJob: Job? = null
     private var isExplicitDisconnect = false
 
+    // Sequential BLE GATT operation queue (Android drops overlapping read/write/descriptor calls)
+    private val gattOpQueue = ArrayDeque<() -> Boolean>()
+    private var isGattOpInFlight = false
+    private var gattOpTimeoutJob: Job? = null
+
     init {
-        // Automatically reconnect to watch when phone's Bluetooth is toggled ON
+        ensureAiWakeChannel()
         try {
             val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-            context.registerReceiver(object : BroadcastReceiver() {
-                override fun onReceive(c: Context?, intent: Intent?) {
-                    val state = intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                    if (state == BluetoothAdapter.STATE_ON) {
-                        Log.d("WatchBleManager", "Bluetooth powered ON; auto-initiating watch reconnect")
-                        isExplicitDisconnect = false
-                        reconnectAttempts = 0
-                        scope.launch {
-                            delay(600)
-                            startScan()
+            ContextCompat.registerReceiver(
+                appContext,
+                object : BroadcastReceiver() {
+                    override fun onReceive(c: Context?, intent: Intent?) {
+                        val state = intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                        if (state == BluetoothAdapter.STATE_ON) {
+                            Log.d(TAG, "Bluetooth powered ON; auto-initiating watch reconnect")
+                            isExplicitDisconnect = false
+                            reconnectAttempts = 0
+                            scope.launch {
+                                delay(600)
+                                startScan()
+                            }
+                        } else if (state == BluetoothAdapter.STATE_OFF) {
+                            stopScan()
+                            cleanupGatt()
+                            _watchData.value = _watchData.value.copy(
+                                connectionState = WatchConnectionState.DISCONNECTED
+                            )
                         }
                     }
-                }
-            }, filter)
+                },
+                filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
         } catch (e: Exception) {
-            Log.w("WatchBleManager", "Bluetooth state receiver registration failed", e)
+            Log.w(TAG, "Bluetooth state receiver registration failed", e)
+        }
+    }
+
+    private fun hasBluetoothConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun hasBluetoothScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.BLUETOOTH_SCAN) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -83,7 +143,8 @@ class WatchBleManager(private val context: Context) {
                     serviceUuids.contains(BleConstants.SERVICE_BAS)
 
                 if (hasMatch || hasServices) {
-                    Log.d("WatchBleManager", "Discovered watch via LE scan: $name (${device.address})")
+                    Log.d(TAG, "Discovered watch via LE scan: $name (${device.address})")
+                    prefs.setLastWatch(device.address, name.ifBlank { "WristOS Watch" })
                     stopScan()
                     connectToDevice(device)
                 }
@@ -91,43 +152,44 @@ class WatchBleManager(private val context: Context) {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.e("WatchBleManager", "Scan failed with error code: $errorCode")
-            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+            Log.e(TAG, "Scan failed with error code: $errorCode")
             isScanning = false
+            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+            scheduleReconnect()
         }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-            connectionWatchdogJob?.cancel()
-            connectionWatchdogJob = null
+            scope.launch {
+                connectionWatchdogJob?.cancel()
+                connectionWatchdogJob = null
 
-            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
-                reconnectAttempts = 0
-                isExplicitDisconnect = false
-                _watchData.value = _watchData.value.copy(
-                    connectionState = WatchConnectionState.CONNECTED,
-                    deviceName = gatt?.device?.name ?: "WristOS",
-                    lastSyncTime = System.currentTimeMillis()
-                )
-                // Discover services on connected watch
-                gatt?.discoverServices()
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
-                Log.w("WatchBleManager", "GATT disconnected (status=$status, newState=$newState)")
-                cleanupGatt()
+                if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                    reconnectAttempts = 0
+                    reconnectJob?.cancel()
+                    isExplicitDisconnect = false
 
-                if (!isExplicitDisconnect && reconnectAttempts < 3) {
-                    reconnectAttempts++
-                    val delayMs = reconnectAttempts * 1000L
-                    Log.d("WatchBleManager", "Retrying watch connection (attempt #$reconnectAttempts in ${delayMs}ms)...")
-                    scope.launch {
-                        delay(delayMs)
-                        startActiveScan()
-                    }
-                } else {
+                    val resolvedName = gatt?.device?.name?.takeIf { it.isNotBlank() }
+                        ?: prefs.getLastWatchName()
+                        ?: "WristOS Watch"
+                    gatt?.device?.address?.let { addr -> prefs.setLastWatch(addr, resolvedName) }
+
+                    _watchData.value = _watchData.value.copy(
+                        connectionState = WatchConnectionState.CONNECTED,
+                        deviceName = resolvedName,
+                        lastSyncTime = System.currentTimeMillis()
+                    )
+                    gatt?.discoverServices()
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
+                    Log.w(TAG, "GATT disconnected (status=$status, newState=$newState)")
+                    cleanupGatt()
                     _watchData.value = _watchData.value.copy(
                         connectionState = WatchConnectionState.DISCONNECTED
                     )
+                    if (!isExplicitDisconnect) {
+                        scheduleReconnect()
+                    }
                 }
             }
         }
@@ -135,19 +197,24 @@ class WatchBleManager(private val context: Context) {
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
                 scope.launch {
-                    syncCurrentTime(gatt)
-                    kotlinx.coroutines.delay(350)
-                    enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT)
-                    kotlinx.coroutines.delay(350)
-                    enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT)
-                    kotlinx.coroutines.delay(350)
-                    enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS)
-                    kotlinx.coroutines.delay(350)
-                    readBattery(gatt)
-                    kotlinx.coroutines.delay(350)
-                    readSteps(gatt)
+                    clearGattQueue()
+                    enqueueGattOp { syncCurrentTime(gatt) }
+                    enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
+                    enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT) }
+                    enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS) }
+                    enqueueGattOp { readBattery(gatt) }
+                    enqueueGattOp { readSteps(gatt) }
+                    startPeriodicSync(gatt)
                 }
             }
+        }
+
+        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            scope.launch { finishCurrentGattOp() }
+        }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+            scope.launch { finishCurrentGattOp() }
         }
 
         @Deprecated("Deprecated in Java")
@@ -163,6 +230,14 @@ class WatchBleManager(private val context: Context) {
             handleCharacteristicData(characteristic, value)
         }
 
+        @Deprecated("Deprecated in Java")
+        override fun onCharacteristicRead(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null) {
+                handleCharacteristicData(characteristic, characteristic.value)
+            }
+            scope.launch { finishCurrentGattOp() }
+        }
+
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
@@ -172,46 +247,163 @@ class WatchBleManager(private val context: Context) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 handleCharacteristicData(characteristic, value)
             }
+            scope.launch { finishCurrentGattOp() }
         }
     }
 
-    fun startScan() {
+    private fun enqueueGattOp(op: () -> Boolean) {
+        gattOpQueue.addLast(op)
+        processNextGattOp()
+    }
+
+    private fun processNextGattOp() {
+        if (isGattOpInFlight) return
+        while (gattOpQueue.isNotEmpty()) {
+            val next = gattOpQueue.removeFirst()
+            val started = try {
+                next()
+            } catch (e: Exception) {
+                Log.w(TAG, "GATT op exception", e)
+                false
+            }
+            if (started) {
+                isGattOpInFlight = true
+                gattOpTimeoutJob?.cancel()
+                gattOpTimeoutJob = scope.launch {
+                    delay(2500L)
+                    Log.w(TAG, "GATT op timed out; advancing queue")
+                    finishCurrentGattOp()
+                }
+                return
+            }
+        }
+    }
+
+    private fun finishCurrentGattOp() {
+        gattOpTimeoutJob?.cancel()
+        gattOpTimeoutJob = null
+        isGattOpInFlight = false
+        processNextGattOp()
+    }
+
+    private fun clearGattQueue() {
+        gattOpTimeoutJob?.cancel()
+        gattOpTimeoutJob = null
+        isGattOpInFlight = false
+        gattOpQueue.clear()
+    }
+
+    private fun startPeriodicSync(gatt: BluetoothGatt) {
+        periodicSyncJob?.cancel()
+        periodicSyncJob = scope.launch {
+            while (_watchData.value.connectionState == WatchConnectionState.CONNECTED && bluetoothGatt == gatt) {
+                delay(60_000L)
+                if (prefs.autoSync.value) {
+                    enqueueGattOp { readBattery(gatt) }
+                    enqueueGattOp { readSteps(gatt) }
+                }
+            }
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (isExplicitDisconnect) return
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
+        if (!hasBluetoothConnectPermission() || !hasBluetoothScanPermission()) return
+
+        reconnectJob?.cancel()
+        reconnectAttempts++
+        val delayMs = when (reconnectAttempts) {
+            1 -> 1500L
+            2 -> 3000L
+            3 -> 6000L
+            4 -> 12000L
+            else -> 25000L
+        }
+        Log.d(TAG, "Scheduling watch auto-reconnect #$reconnectAttempts in ${delayMs}ms")
+        reconnectJob = scope.launch {
+            delay(delayMs)
+            if (!isExplicitDisconnect && _watchData.value.connectionState == WatchConnectionState.DISCONNECTED) {
+                startScan(preserveReconnectCount = true)
+            }
+        }
+    }
+
+    fun ensureScanningOrConnected() {
+        if (isExplicitDisconnect) return
+        val state = _watchData.value.connectionState
+        if (state == WatchConnectionState.DISCONNECTED && !isScanning) {
+            startScan()
+        }
+    }
+
+    fun startScan(preserveReconnectCount: Boolean = false) {
         val scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null || !bluetoothAdapter.isEnabled) {
-            // Emulated demo mode fallback for emulator testing
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            // Only simulate if there's no Bluetooth hardware (e.g. Android Emulator)
+            if (bluetoothAdapter == null) {
+                simulateWatchConnection()
+            } else {
+                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+            }
+            return
+        }
+
+        if (!hasBluetoothConnectPermission() || !hasBluetoothScanPermission()) {
+            Log.w(TAG, "Missing Bluetooth permissions; deferring scan")
+            return
+        }
+
+        if (scanner == null) {
             simulateWatchConnection()
             return
         }
 
         isExplicitDisconnect = false
-        reconnectAttempts = 0
+        if (!preserveReconnectCount) {
+            reconnectAttempts = 0
+        }
+        reconnectJob?.cancel()
 
-        // Check if watch is already bonded in system settings
+        // 1. Try previously connected watch address first (even if not OS-bonded)
+        val savedAddr = prefs.getLastWatchAddress()
+        if (!savedAddr.isNullOrBlank()) {
+            try {
+                val savedDevice = bluetoothAdapter.getRemoteDevice(savedAddr)
+                Log.d(TAG, "Connecting to saved watch: $savedAddr")
+                connectToDevice(savedDevice)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Invalid saved watch address: $savedAddr", e)
+            }
+        }
+
+        // 2. Check OS bonded devices
         val bonded = bluetoothAdapter.bondedDevices
         val pairedWatch = bonded?.firstOrNull { d ->
             val name = d.name ?: ""
             name.contains("WristOS", ignoreCase = true) ||
-            name.contains("PineTime", ignoreCase = true) ||
-            name.contains("InfiniTime", ignoreCase = true)
+                name.contains("PineTime", ignoreCase = true) ||
+                name.contains("InfiniTime", ignoreCase = true)
         }
         if (pairedWatch != null) {
-            Log.d("WatchBleManager", "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address}); starting direct connect with fallback")
+            Log.d(TAG, "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address})")
             connectToDevice(pairedWatch)
             return
         }
 
+        // 3. Active LE scan
         startActiveScan()
     }
 
     fun startActiveScan() {
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null || !bluetoothAdapter.isEnabled) return
+        val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
+        if (!bluetoothAdapter.isEnabled || !hasBluetoothScanPermission()) return
 
         stopScan()
         isScanning = true
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.SCANNING)
 
-        // Low latency scanning (100% duty cycle) for instantaneous discovery even after days of disconnection
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setReportDelay(0)
@@ -227,8 +419,27 @@ class WatchBleManager(private val context: Context) {
         try {
             scanner.startScan(filters, settings, scanCallback)
         } catch (e: Exception) {
-            Log.w("WatchBleManager", "Filtered scan start failed; falling back to open low-latency scan", e)
-            scanner.startScan(scanCallback)
+            Log.w(TAG, "Filtered scan start failed; falling back to open low-latency scan", e)
+            try {
+                scanner.startScan(scanCallback)
+            } catch (ex: Exception) {
+                Log.e(TAG, "Open LE scan failed", ex)
+                isScanning = false
+                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+                return
+            }
+        }
+
+        // Scan window watchdog (15s) -> retry or backoff instead of burning battery forever
+        connectionWatchdogJob?.cancel()
+        connectionWatchdogJob = scope.launch {
+            delay(15_000L)
+            if (isScanning && _watchData.value.connectionState == WatchConnectionState.SCANNING) {
+                Log.d(TAG, "LE scan window ended without finding watch; pausing before retry")
+                stopScan()
+                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+                scheduleReconnect()
+            }
         }
     }
 
@@ -236,32 +447,31 @@ class WatchBleManager(private val context: Context) {
         if (isScanning) {
             try {
                 bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
-            } catch (e: Exception) {
-                // Ignore
+            } catch (_: Exception) {
             }
             isScanning = false
         }
     }
 
     private fun connectToDevice(device: BluetoothDevice) {
+        if (!hasBluetoothConnectPermission()) return
         connectionWatchdogJob?.cancel()
         cleanupGatt()
 
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.CONNECTING)
 
         val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } else {
-            device.connectGatt(context, false, gattCallback)
+            device.connectGatt(appContext, false, gattCallback)
         }
         refreshGattCache(gatt)
         bluetoothGatt = gatt
 
-        // Watchdog: If direct connection takes > 5 seconds, fallback to active low-latency LE scan
         connectionWatchdogJob = scope.launch {
-            delay(5000)
+            delay(6000L)
             if (_watchData.value.connectionState == WatchConnectionState.CONNECTING) {
-                Log.d("WatchBleManager", "Direct connect timed out (>5s); falling back to active low-latency scan")
+                Log.d(TAG, "Direct connect timed out (>6s); falling back to active low-latency scan")
                 cleanupGatt()
                 startActiveScan()
             }
@@ -272,17 +482,21 @@ class WatchBleManager(private val context: Context) {
         isExplicitDisconnect = true
         connectionWatchdogJob?.cancel()
         connectionWatchdogJob = null
+        reconnectJob?.cancel()
+        reconnectJob = null
         stopScan()
         cleanupGatt()
         _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
     }
 
     private fun cleanupGatt() {
+        periodicSyncJob?.cancel()
+        periodicSyncJob = null
+        clearGattQueue()
         try {
             bluetoothGatt?.disconnect()
             bluetoothGatt?.close()
-        } catch (e: Exception) {
-            // Ignore
+        } catch (_: Exception) {
         } finally {
             bluetoothGatt = null
         }
@@ -292,14 +506,56 @@ class WatchBleManager(private val context: Context) {
         return try {
             val refreshMethod = gatt?.javaClass?.getMethod("refresh")
             (refreshMethod?.invoke(gatt) as? Boolean) ?: false
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
 
-    private fun syncCurrentTime(gatt: BluetoothGatt) {
-        val cts = gatt.getService(BleConstants.SERVICE_CTS)
-        val char = cts?.getCharacteristic(BleConstants.CHAR_CURRENT_TIME) ?: return
+    fun forceSyncTelemetry() {
+        val gatt = bluetoothGatt ?: run {
+            startScan()
+            return
+        }
+        enqueueGattOp { syncCurrentTime(gatt) }
+        enqueueGattOp { readBattery(gatt) }
+        enqueueGattOp { readSteps(gatt) }
+    }
+
+    private fun writeCharacteristicCompat(
+        gatt: BluetoothGatt,
+        char: BluetoothGattCharacteristic,
+        payload: ByteArray
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val code = gatt.writeCharacteristic(char, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            code == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            char.value = payload
+            @Suppress("DEPRECATION")
+            gatt.writeCharacteristic(char)
+        }
+    }
+
+    private fun writeDescriptorCompat(
+        gatt: BluetoothGatt,
+        descriptor: BluetoothGattDescriptor,
+        value: ByteArray
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val code = gatt.writeDescriptor(descriptor, value)
+            code == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            descriptor.value = value
+            @Suppress("DEPRECATION")
+            gatt.writeDescriptor(descriptor)
+        }
+    }
+
+    private fun syncCurrentTime(gatt: BluetoothGatt): Boolean {
+        val cts = gatt.getService(BleConstants.SERVICE_CTS) ?: return false
+        val char = cts.getCharacteristic(BleConstants.CHAR_CURRENT_TIME) ?: return false
 
         val calendar = Calendar.getInstance()
         val year = calendar.get(Calendar.YEAR)
@@ -319,24 +575,22 @@ class WatchBleManager(private val context: Context) {
             minutes,
             seconds,
             dayOfWeek,
-            0, // Fractions 1/256
-            1  // Adjust reason
+            0,
+            1
         )
-
-        char.value = payload
-        gatt.writeCharacteristic(char)
+        return writeCharacteristicCompat(gatt, char, payload)
     }
 
-    private fun readBattery(gatt: BluetoothGatt) {
-        val bas = gatt.getService(BleConstants.SERVICE_BAS)
-        val char = bas?.getCharacteristic(BleConstants.CHAR_BATTERY_LEVEL) ?: return
-        gatt.readCharacteristic(char)
+    private fun readBattery(gatt: BluetoothGatt): Boolean {
+        val bas = gatt.getService(BleConstants.SERVICE_BAS) ?: return false
+        val char = bas.getCharacteristic(BleConstants.CHAR_BATTERY_LEVEL) ?: return false
+        return gatt.readCharacteristic(char)
     }
 
-    private fun readSteps(gatt: BluetoothGatt) {
-        val motion = gatt.getService(BleConstants.SERVICE_MOTION)
-        val char = motion?.getCharacteristic(BleConstants.CHAR_STEPS) ?: return
-        gatt.readCharacteristic(char)
+    private fun readSteps(gatt: BluetoothGatt): Boolean {
+        val motion = gatt.getService(BleConstants.SERVICE_MOTION) ?: return false
+        val char = motion.getCharacteristic(BleConstants.CHAR_STEPS) ?: return false
+        return gatt.readCharacteristic(char)
     }
 
     private fun enableNotifications(gatt: BluetoothGatt, serviceUuid: UUID, charUuid: UUID): Boolean {
@@ -344,40 +598,52 @@ class WatchBleManager(private val context: Context) {
         val char = service.getCharacteristic(charUuid) ?: return false
 
         gatt.setCharacteristicNotification(char, true)
-        val descriptor = char.getDescriptor(BleConstants.CLIENT_CHARACTERISTIC_CONFIG)
-        if (descriptor != null) {
-            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            return gatt.writeDescriptor(descriptor)
-        }
-        return false
+        val descriptor = char.getDescriptor(BleConstants.CLIENT_CHARACTERISTIC_CONFIG) ?: return false
+        return writeDescriptorCompat(gatt, descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
     }
 
     private fun handleCharacteristicData(char: BluetoothGattCharacteristic, data: ByteArray? = char.value) {
         val bytes = data ?: return
         when (char.uuid) {
             BleConstants.CHAR_HEART_RATE_MEASUREMENT -> {
-                if (bytes.isNotEmpty()) {
-                    val hr = if (bytes[0].toInt() and 0x01 == 0) bytes[1].toInt() and 0xFF
-                    else (bytes[1].toInt() and 0xFF) or ((bytes[2].toInt() and 0xFF) shl 8)
-                    _watchData.value = _watchData.value.copy(heartRate = hr)
+                if (bytes.size >= 2) {
+                    val hr = if (bytes[0].toInt() and 0x01 == 0) {
+                        bytes[1].toInt() and 0xFF
+                    } else if (bytes.size >= 3) {
+                        (bytes[1].toInt() and 0xFF) or ((bytes[2].toInt() and 0xFF) shl 8)
+                    } else 0
+                    if (hr > 0) {
+                        _watchData.value = _watchData.value.copy(
+                            heartRate = hr,
+                            lastSyncTime = System.currentTimeMillis()
+                        )
+                    }
                 }
             }
             BleConstants.CHAR_STEPS -> {
                 if (bytes.size >= 4) {
                     val steps = (bytes[0].toInt() and 0xFF) or
-                            ((bytes[1].toInt() and 0xFF) shl 8) or
-                            ((bytes[2].toInt() and 0xFF) shl 16) or
-                            ((bytes[3].toInt() and 0xFF) shl 24)
-                    _watchData.value = _watchData.value.copy(stepCount = steps)
+                        ((bytes[1].toInt() and 0xFF) shl 8) or
+                        ((bytes[2].toInt() and 0xFF) shl 16) or
+                        ((bytes[3].toInt() and 0xFF) shl 24)
+                    _watchData.value = _watchData.value.copy(
+                        stepCount = steps,
+                        lastSyncTime = System.currentTimeMillis()
+                    )
                 }
             }
             BleConstants.CHAR_BATTERY_LEVEL -> {
                 if (bytes.isNotEmpty()) {
-                    _watchData.value = _watchData.value.copy(batteryLevel = bytes[0].toInt() and 0xFF)
+                    _watchData.value = _watchData.value.copy(
+                        batteryLevel = bytes[0].toInt() and 0xFF,
+                        lastSyncTime = System.currentTimeMillis()
+                    )
                 }
             }
             BleConstants.CHAR_MUSIC_EVENT -> {
                 if (bytes.isNotEmpty() && (bytes[0].toInt() and 0xFF) == 0xAA) {
+                    Log.d(TAG, "Received EVENT_TRIGGER_AI (0xAA) from watch!")
+                    _pendingAiTrigger.value = System.currentTimeMillis()
                     _aiTriggerEvent.tryEmit(Unit)
                     wakePhoneForAi()
                 }
@@ -386,70 +652,163 @@ class WatchBleManager(private val context: Context) {
     }
 
     fun triggerAiManually() {
+        _pendingAiTrigger.value = System.currentTimeMillis()
         _aiTriggerEvent.tryEmit(Unit)
+    }
+
+    fun consumePendingAiTrigger(): Boolean {
+        return if (_pendingAiTrigger.value != 0L) {
+            _pendingAiTrigger.value = 0L
+            true
+        } else {
+            false
+        }
+    }
+
+    private fun ensureAiWakeChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
+            if (manager.getNotificationChannel(AI_WAKE_CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    AI_WAKE_CHANNEL_ID,
+                    "Watch AI Wake Trigger",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Wakes the phone screen and opens WristOS AI when triggered from your watch"
+                    setShowBadge(false)
+                    enableVibration(false)
+                    setSound(null, null)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    fun dismissWakeNotification() {
+        try {
+            val manager = appContext.getSystemService(NotificationManager::class.java)
+            manager?.cancel(AI_WAKE_NOTIFICATION_ID)
+        } catch (_: Exception) {
+        }
     }
 
     private fun wakePhoneForAi() {
         try {
-            // 1. Wake screen if device is locked or screen is off
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            // 1. Wake screen/CPU even when phone is locked or sleeping
+            val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            @Suppress("DEPRECATION")
             val wakeLock = powerManager?.newWakeLock(
-                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
                 "wristos:ai_wake"
             )
-            wakeLock?.acquire(3000)
+            wakeLock?.acquire(8000L)
 
-            // 2. Play haptic buzz so user feels the phone is awake
-            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
-                vm?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-            }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(150, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(150)
+            // 2. Haptic buzz confirmation
+            if (prefs.vibrationAlerts.value) {
+                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vm = appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                    vm?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    appContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(VibrationEffect.createOneShot(180, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(180)
+                }
             }
 
-            // 3. Bring MainActivity to foreground
-            val intent = Intent(context, com.wristos.app.MainActivity::class.java).apply {
-                action = "com.wristos.app.TRIGGER_AI"
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            // 3. Build Activity Intent + Full-Screen Intent Notification (required for Android 10-15 lockscreen/background wake)
+            val intent = Intent(appContext, MainActivity::class.java).apply {
+                action = ACTION_TRIGGER_AI
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-            context.startActivity(intent)
+
+            val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val fullScreenPendingIntent = PendingIntent.getActivity(appContext, 1002, intent, pendingFlags)
+
+            ensureAiWakeChannel()
+            val wakeNotification = NotificationCompat.Builder(appContext, AI_WAKE_CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("WristOS AI Activated")
+                .setContentText("Watch triggered voice assistant • Tap to speak")
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .setTimeoutAfter(8000L)
+                .setContentIntent(fullScreenPendingIntent)
+                .setFullScreenIntent(fullScreenPendingIntent, true)
+                .build()
+
+            val notifManager = appContext.getSystemService(NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notifManager?.notify(AI_WAKE_NOTIFICATION_ID, wakeNotification)
+            }
+
+            // 4. Direct launch (succeeds immediately when app is active or SYSTEM_ALERT_WINDOW is granted)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    val options = ActivityOptions.makeBasic()
+                        .setPendingIntentBackgroundActivityStartMode(
+                            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                        )
+                    appContext.startActivity(intent, options.toBundle())
+                } else {
+                    appContext.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Direct background startActivity fell back to FullScreenIntent notification", e)
+            }
         } catch (e: Exception) {
-            android.util.Log.e("WatchBleManager", "Could not wake phone for AI trigger", e)
+            Log.e(TAG, "Could not wake phone for AI trigger", e)
         }
     }
 
     fun sendAlertNotification(title: String, message: String = "") {
+        if (!prefs.notificationsEnabled.value) return
         val gatt = bluetoothGatt ?: return
-        val ans = gatt.getService(BleConstants.SERVICE_ANS)
-        val char = ans?.getCharacteristic(BleConstants.CHAR_NEW_ALERT) ?: return
+        enqueueGattOp {
+            val ans = gatt.getService(BleConstants.SERVICE_ANS) ?: return@enqueueGattOp false
+            val char = ans.getCharacteristic(BleConstants.CHAR_NEW_ALERT) ?: return@enqueueGattOp false
 
-        val titleBytes = title.toByteArray(Charsets.UTF_8).take(32).toByteArray()
-        val msgBytes = (if (message.isNotEmpty()) message else title).toByteArray(Charsets.UTF_8).take(64).toByteArray()
-        val payload = byteArrayOf(0x05, 0x01, 0x00) + titleBytes + byteArrayOf(0x00) + msgBytes
-        char.value = payload
-        gatt.writeCharacteristic(char)
+            val titleBytes = title.toByteArray(Charsets.UTF_8).take(32).toByteArray()
+            val msgBytes = (if (message.isNotEmpty()) message else title).toByteArray(Charsets.UTF_8).take(64).toByteArray()
+            val payload = byteArrayOf(0x05, 0x01, 0x00) + titleBytes + byteArrayOf(0x00) + msgBytes
+            writeCharacteristicCompat(gatt, char, payload)
+        }
     }
 
-    // Emulator / Simulator fallback so team can test UI without physical watch connected
     private fun simulateWatchConnection() {
         scope.launch {
             _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.CONNECTING)
-            kotlinx.coroutines.delay(1000)
+            delay(800)
             _watchData.value = WatchData(
                 deviceName = "PineTime (Simulated)",
                 connectionState = WatchConnectionState.CONNECTED,
-                heartRate = 72,
+                heartRate = 74,
                 stepCount = 6840,
                 batteryLevel = 88,
                 lastSyncTime = System.currentTimeMillis()
             )
         }
+    }
+
+    companion object {
+        private const val TAG = "WatchBleManager"
+        const val ACTION_TRIGGER_AI = "com.wristos.app.TRIGGER_AI"
+        private const val AI_WAKE_CHANNEL_ID = "wristos_ai_wake_channel"
+        private const val AI_WAKE_NOTIFICATION_ID = 1002
     }
 }

@@ -10,5 +10,7 @@ data class TaskEntity(
     val title: String,
     val dueTime: String = "Today",
     val isCompleted: Boolean = false,
+    val priority: String = "normal",
+    val category: String = "general",
     val createdAt: Long = System.currentTimeMillis()
 )

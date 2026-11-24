@@ -14,6 +14,9 @@ interface MemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMemory(memory: MemoryEntity): Long
 
+    @Update
+    suspend fun updateMemory(memory: MemoryEntity)
+
     @Delete
     suspend fun deleteMemory(memory: MemoryEntity)
 }

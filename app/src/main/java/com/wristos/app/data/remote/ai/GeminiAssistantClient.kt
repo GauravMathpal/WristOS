@@ -10,45 +10,56 @@ data class AssistantReply(
     val action: AssistantAction = AssistantAction.None
 )
 
-class GeminiAssistantClient {
+class GeminiAssistantClient(
+    private val customApiKeyProvider: () -> String = { "" }
+) {
 
-    private val model: GenerativeModel? by lazy {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isNotBlank()) {
-            GenerativeModel(
-                modelName = "gemini-1.5-flash",
-                apiKey = apiKey
-            )
-        } else {
-            null
-        }
+    private var cachedApiKey: String? = null
+    private var primaryModel: GenerativeModel? = null
+    private var fallbackModel: GenerativeModel? = null
+
+    private fun activeApiKey(): String {
+        val custom = customApiKeyProvider().trim()
+        return custom.ifBlank { BuildConfig.GEMINI_API_KEY.trim() }
     }
 
     val isConfigured: Boolean
-        get() = BuildConfig.GEMINI_API_KEY.isNotBlank()
+        get() = activeApiKey().isNotBlank()
+
+    private fun ensureModels(): Pair<GenerativeModel, GenerativeModel>? {
+        val key = activeApiKey()
+        if (key.isBlank()) return null
+        if (cachedApiKey != key || primaryModel == null || fallbackModel == null) {
+            cachedApiKey = key
+            primaryModel = GenerativeModel(modelName = "gemini-2.0-flash", apiKey = key)
+            fallbackModel = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = key)
+        }
+        return Pair(primaryModel!!, fallbackModel!!)
+    }
 
     suspend fun generateResponse(
         userPrompt: String,
         personalMemories: List<String> = emptyList(),
-        pendingTasks: List<String> = emptyList()
+        pendingTasks: List<String> = emptyList(),
+        recentHistory: List<Pair<String, String>> = emptyList()
     ): Result<AssistantReply> = withContext(Dispatchers.IO) {
-        val activeModel = model
+        val models = ensureModels()
             ?: return@withContext Result.failure(
-                IllegalStateException("Gemini API key is not configured. Falling back to Smart Engine.")
+                IllegalStateException("Gemini API key is not configured. Using offline Smart Engine.")
             )
 
         val promptBuilder = StringBuilder()
         promptBuilder.append("You are WristOS, an intelligent personal assistant powering an Android smartphone and a PineTime smartwatch.\n")
         promptBuilder.append("Keep your replies concise, friendly, and practical (1-2 sentences max).\n")
         promptBuilder.append("STRICT ACTION DIRECTIVE:\n")
-        promptBuilder.append("- If the user states ANY task, to-do, deadline, or commitment (e.g., 'have to...', 'need to...', 'complete...', 'due tmr', 'remind me'), confirm concisely and ALWAYS append: [ACTION:TASK|Task Title|Due Time] at the very end.\n")
+        promptBuilder.append("- If the user states ANY task, to-do, deadline, or commitment (e.g., 'have to...', 'need to...', 'complete...', 'by tmr 5pm', 'remind me'), confirm concisely and ALWAYS append: [ACTION:TASK|Task Title|Due Time] at the very end.\n")
         promptBuilder.append("- If the user wants to remember or store a fact, confirm concisely and ALWAYS append: [ACTION:MEMORY|Category|Fact to remember] at the very end.\n")
         promptBuilder.append("- If the user wants to alert or buzz the watch, ALWAYS append: [ACTION:ALERT|Max 18 chars] at the very end.\n")
         promptBuilder.append("If no action is needed, do not include any ACTION tag.\n\n")
 
         if (personalMemories.isNotEmpty()) {
             promptBuilder.append("Known User Facts:\n")
-            personalMemories.forEach { fact ->
+            personalMemories.take(6).forEach { fact ->
                 promptBuilder.append("• ").append(fact).append("\n")
             }
             promptBuilder.append("\n")
@@ -56,19 +67,31 @@ class GeminiAssistantClient {
 
         if (pendingTasks.isNotEmpty()) {
             promptBuilder.append("User's Pending Tasks:\n")
-            pendingTasks.forEach { task ->
+            pendingTasks.take(6).forEach { task ->
                 promptBuilder.append("• ").append(task).append("\n")
             }
             promptBuilder.append("\n")
         }
 
+        if (recentHistory.isNotEmpty()) {
+            promptBuilder.append("Recent Conversation:\n")
+            recentHistory.takeLast(6).forEach { (role, msg) ->
+                promptBuilder.append(role).append(": ").append(msg).append("\n")
+            }
+            promptBuilder.append("\n")
+        }
+
         promptBuilder.append("User message: ").append(userPrompt)
+        val fullPrompt = promptBuilder.toString()
 
         try {
-            val response = activeModel.generateContent(promptBuilder.toString())
+            val response = try {
+                models.first.generateContent(fullPrompt)
+            } catch (_: Exception) {
+                models.second.generateContent(fullPrompt)
+            }
             val rawText = response.text?.trim() ?: "I couldn't process that."
-            val reply = parseAssistantReply(rawText, userPrompt)
-            Result.success(reply)
+            Result.success(parseAssistantReply(rawText, userPrompt))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -85,17 +108,17 @@ class GeminiAssistantClient {
 
             val action = when (type) {
                 "TASK" -> {
-                    val title = payload.getOrNull(0)?.trim() ?: "New Task"
-                    val due = payload.getOrNull(1)?.trim() ?: "Today"
+                    val title = payload.getOrNull(0)?.trim()?.ifBlank { "New Task" } ?: "New Task"
+                    val due = payload.getOrNull(1)?.trim()?.ifBlank { "Today" } ?: "Today"
                     AssistantAction.CreateTask(title, due)
                 }
                 "MEMORY" -> {
-                    val tag = payload.getOrNull(0)?.trim() ?: "General"
-                    val fact = payload.getOrNull(1)?.trim() ?: ""
+                    val tag = payload.getOrNull(0)?.trim()?.ifBlank { "Personal" } ?: "Personal"
+                    val fact = payload.getOrNull(1)?.trim().orEmpty()
                     if (fact.isNotBlank()) AssistantAction.SaveMemory(tag, fact) else AssistantAction.None
                 }
                 "ALERT" -> {
-                    val msg = payload.getOrNull(0)?.trim() ?: "WristOS Alert"
+                    val msg = payload.getOrNull(0)?.trim()?.ifBlank { "WristOS Alert" } ?: "WristOS Alert"
                     AssistantAction.WatchAlert(msg)
                 }
                 else -> AssistantAction.None
@@ -104,11 +127,14 @@ class GeminiAssistantClient {
             return AssistantReply(replyText = cleanText, action = action)
         }
 
-        // Safety fallback: If Gemini omitted the action tag, extract intent from prompt
+        // Safety fallback: If LLM omitted the action tag, detect intent directly from prompt
         if (userPrompt.isNotBlank()) {
             if (hasTaskIntent(userPrompt)) {
                 val (title, dueTime) = extractTaskDetails(userPrompt)
-                val cleanText = if (rawText.isBlank() || rawText.contains("I don't have that", ignoreCase = true)) {
+                val cleanText = if (rawText.isBlank() ||
+                    rawText.contains("I don't have that", ignoreCase = true) ||
+                    rawText.contains("I'm with you", ignoreCase = true)
+                ) {
                     "I've added \"$title\" to your agenda for $dueTime."
                 } else {
                     rawText.trim()
@@ -118,7 +144,10 @@ class GeminiAssistantClient {
 
             if (hasMemoryIntent(userPrompt)) {
                 val (tag, fact) = extractMemoryDetails(userPrompt)
-                val cleanText = if (rawText.isBlank() || rawText.contains("I don't have that", ignoreCase = true)) {
+                val cleanText = if (rawText.isBlank() ||
+                    rawText.contains("I don't have that", ignoreCase = true) ||
+                    rawText.contains("I'm with you", ignoreCase = true)
+                ) {
                     "Saved \"$fact\" to your Knowledge Vault under #$tag."
                 } else {
                     rawText.trim()
@@ -137,9 +166,6 @@ class GeminiAssistantClient {
         return AssistantReply(replyText = rawText.trim(), action = AssistantAction.None)
     }
 
-    /**
-     * Offline Smart Engine: Runs on device with 0 latency and 0 API requirements
-     */
     fun generateOfflineResponse(
         userPrompt: String,
         personalMemories: List<String> = emptyList(),
@@ -151,9 +177,14 @@ class GeminiAssistantClient {
         return when {
             lower.contains("plan my day") || lower.contains("daily schedule") || lower.contains("what should i do") -> {
                 val reply = if (pendingTasks.isNotEmpty()) {
-                    "Here is your game plan: Start with \"${pendingTasks[0]}\", then proceed with ${pendingTasks.drop(1).joinToString(", ")}. Begin with a 25-minute Pomodoro focus block!"
+                    val rest = pendingTasks.drop(1)
+                    if (rest.isNotEmpty()) {
+                        "Here is your game plan: Start with \"${pendingTasks[0]}\", then proceed with ${rest.joinToString(", ")}. Begin with a 25-minute focus block!"
+                    } else {
+                        "Here is your game plan: Focus on \"${pendingTasks[0]}\" first with a 25-minute Pomodoro block!"
+                    }
                 } else {
-                    "Your agenda is currently clear. What goals would you like to schedule for today?"
+                    "Your agenda is currently clear. Tell me what tasks or goals you want to schedule today."
                 }
                 AssistantReply(replyText = reply)
             }
@@ -178,89 +209,113 @@ class GeminiAssistantClient {
                 )
             }
             lower.contains("health") || lower.contains("step") || lower.contains("heart rate") || lower.contains("bpm") -> {
-                AssistantReply(replyText = "You're tracking steadily with your daily activity goal and your resting heart rate is in optimal cardio range.")
+                AssistantReply(replyText = "You're tracking steadily toward your daily activity goal and your watch telemetry bridge is active.")
             }
             lower.contains("who are you") || lower.contains("what can you do") -> {
-                AssistantReply(replyText = "I am WristOS, your personal intelligence assistant. I manage your daily tasks, maintain your knowledge vault, monitor watch biometrics, and guide your focus sessions.")
+                AssistantReply(replyText = "I am WristOS, your personal intelligence assistant. I manage your daily tasks, save facts to your Knowledge Vault, and send alerts to your watch.")
             }
             else -> {
-                AssistantReply(replyText = "I'm with you. You have ${pendingTasks.size} pending task(s) and ${personalMemories.size} facts in your records. What would you like to plan or remember next?")
+                AssistantReply(replyText = "I'm ready. You have ${pendingTasks.size} pending task(s) and ${personalMemories.size} saved memories. What should we plan or save next?")
             }
         }
     }
 
-    fun hasTaskIntent(prompt: String): Boolean {
-        val lower = prompt.lowercase()
-        return Regex("\\b(have to|need to|must|have complete|complete|finish|submit|prepare|buy|call|schedule|remind|agenda|task|todo|to-do|due|deadline)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
-               Regex("\\b(tmr|tomorrow|tonight)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
-               Regex("\\b(by|at)\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-    }
-
-    fun hasMemoryIntent(prompt: String): Boolean {
-        val lower = prompt.lowercase()
-        return Regex("\\b(remember that|remember|save fact that|save fact|note that|store fact|keep in mind|my \\w+ is)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-    }
-
-    fun hasAlertIntent(prompt: String): Boolean {
-        val lower = prompt.lowercase()
-        return Regex("\\b(vibrate|buzz|alert watch|ping watch|haptic|alarm)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-    }
-
-    fun extractTaskDetails(rawPrompt: String): Pair<String, String> {
-        val text = rawPrompt.trim()
-        val lower = text.lowercase()
-
-        var dueTime = "Today"
-        val isTmr = Regex("\\b(tmr|tomorrow)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-        val isTonight = Regex("\\btonight\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-        val isToday = Regex("\\btoday\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-
-        val clockMatch = Regex("\\b(?:at|by\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)\\b", RegexOption.IGNORE_CASE).find(text)
-        var timeStr = ""
-        if (clockMatch != null) {
-            val hour = clockMatch.groupValues[1]
-            val min = clockMatch.groupValues[2].ifEmpty { "00" }
-            val ampm = clockMatch.groupValues[3].uppercase()
-            timeStr = "$hour:$min $ampm"
+    companion object {
+        fun hasTaskIntent(prompt: String): Boolean {
+            val lower = prompt.lowercase()
+            return Regex("\\b(have to|need to|must|have complete|complete|finish|submit|prepare|buy|call|schedule|remind|agenda|task|todo|to-do|due|deadline)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
+                Regex("\\b(tmr|tomorrow|tonight)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
+                Regex("\\b(by|at)\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
+                Regex("\\b\\d{1,2}(:\\d{2})?\\s*(am|pm)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
         }
 
-        dueTime = when {
-            isTmr -> if (timeStr.isNotEmpty()) "Tomorrow, $timeStr" else "Tomorrow"
-            isTonight -> if (timeStr.isNotEmpty()) "Tonight, $timeStr" else "Tonight, 9:00 PM"
-            isToday -> if (timeStr.isNotEmpty()) "Today, $timeStr" else "Today"
-            timeStr.isNotEmpty() -> "Today, $timeStr"
-            else -> "Today"
+        fun hasMemoryIntent(prompt: String): Boolean {
+            val lower = prompt.lowercase()
+            return Regex("\\b(remember that|remember|save fact that|save fact|note that|store fact|keep in mind|my \\w+ is)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
         }
 
-        var title = text
-            .replace(Regex("^(please\\s+)?(remind me to|create a task to|add a task to|add task to|add a task|add task|create task|schedule a task to|schedule to|schedule a task|schedule|i have to|i have|i need to|i must|i should|have to|need to|set a reminder to|set reminder to)\\s*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\b(?:by|at|due|on)?\\s*(?:tmr|tomorrow|tonight|today)(?:\\s*(?:at|by)?\\s*\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)?\\b", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\b(?:at|by)\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?\\b", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b", RegexOption.IGNORE_CASE), "")
-            .trim(' ', ',', '.', ':', ';', '-')
-
-        if (title.isBlank()) title = text
-        title = title.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-
-        return Pair(title, dueTime)
-    }
-
-    fun extractMemoryDetails(rawPrompt: String): Pair<String, String> {
-        val text = rawPrompt.trim()
-        val lower = text.lowercase()
-
-        val fact = text
-            .replace(Regex("^(please\\s+)?(remember that|remember|save fact that|save fact|note that|store fact|keep in mind)\\s*", RegexOption.IGNORE_CASE), "")
-            .trim(' ', ',', '.', ':', ';', '-')
-            .ifBlank { text }
-
-        val tag = when {
-            lower.contains("health") || lower.contains("water") || lower.contains("bpm") || lower.contains("sleep") || lower.contains("blood") -> "Health"
-            lower.contains("watch") || lower.contains("pinetime") || lower.contains("ble") || lower.contains("hardware") -> "Hardware"
-            lower.contains("study") || lower.contains("exam") || lower.contains("code") || lower.contains("assignment") || lower.contains("work") -> "Work"
-            else -> "Personal"
+        fun hasAlertIntent(prompt: String): Boolean {
+            val lower = prompt.lowercase()
+            return Regex("\\b(vibrate|buzz|alert watch|ping watch|haptic|alarm)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
         }
 
-        return Pair(tag, fact)
+        fun extractTaskDetails(rawPrompt: String): Pair<String, String> {
+            val text = rawPrompt.trim()
+            val lower = text.lowercase()
+
+            val isTmr = Regex("\\b(tmr|tomorrow)\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            val isTonight = Regex("\\btonight\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            val isToday = Regex("\\btoday\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+
+            val standardMatch = Regex("\\b(?:at|by\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)\\b", RegexOption.IGNORE_CASE).find(text)
+            val militaryMatch = Regex("\\b(?:at|by\\s+)?([01]?\\d|2[0-3]):([0-5]\\d)\\b", RegexOption.IGNORE_CASE).find(text)
+            val bareMatch = Regex("\\b(?:at|by)\\s+(\\d{1,2})\\b", RegexOption.IGNORE_CASE).find(text)
+
+            var timeStr = ""
+            if (standardMatch != null) {
+                val hour = standardMatch.groupValues[1].toIntOrNull() ?: 12
+                val min = standardMatch.groupValues[2].ifEmpty { "00" }
+                val ampm = standardMatch.groupValues[3].uppercase()
+                timeStr = "$hour:$min $ampm"
+            } else if (militaryMatch != null) {
+                var hour = militaryMatch.groupValues[1].toIntOrNull() ?: 12
+                val min = militaryMatch.groupValues[2]
+                val ampm = if (hour >= 12) "PM" else "AM"
+                hour = if (hour % 12 == 0) 12 else hour % 12
+                timeStr = "$hour:$min $ampm"
+            } else if (bareMatch != null) {
+                val hour = bareMatch.groupValues[1].toIntOrNull() ?: 0
+                if (hour in 1..12) {
+                    val ampm = if (hour in 1..7) "PM" else "AM"
+                    timeStr = "$hour:00 $ampm"
+                }
+            }
+
+            val dueTime = when {
+                isTmr -> if (timeStr.isNotEmpty()) "Tomorrow, $timeStr" else "Tomorrow"
+                isTonight -> if (timeStr.isNotEmpty()) "Tonight, $timeStr" else "Tonight, 9:00 PM"
+                isToday -> if (timeStr.isNotEmpty()) "Today, $timeStr" else "Today"
+                timeStr.isNotEmpty() -> "Today, $timeStr"
+                else -> "Today"
+            }
+
+            var title = text
+                .replace(
+                    Regex(
+                        "^(please\\s+)?(remind me to|create a task to|add a task to|add task to|add a task|add task|create task|schedule a task to|schedule to|schedule a task|schedule|i have to complete|i have complete|i have to finish|i have finish|i have to|i have|i need to|i must|i should|have to complete|have complete|have to|need to|set a reminder to|set reminder to)\\s*",
+                        RegexOption.IGNORE_CASE
+                    ),
+                    ""
+                )
+                .replace(Regex("\\b(?:by|at|due|on)?\\s*(?:tmr|tomorrow|tonight|today)(?:\\s*(?:at|by)?\\s*\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)?\\b", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\b(?:at|by)\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?\\b", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s{2,}"), " ")
+                .trim(' ', ',', '.', ':', ';', '-')
+
+            if (title.isBlank()) title = text
+            title = title.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+            return Pair(title, dueTime)
+        }
+
+        fun extractMemoryDetails(rawPrompt: String): Pair<String, String> {
+            val text = rawPrompt.trim()
+            val lower = text.lowercase()
+
+            val fact = text
+                .replace(Regex("^(please\\s+)?(remember that|remember|save fact that|save fact|note that|store fact|keep in mind)\\s*", RegexOption.IGNORE_CASE), "")
+                .trim(' ', ',', '.', ':', ';', '-')
+                .ifBlank { text }
+
+            val tag = when {
+                lower.contains("health") || lower.contains("water") || lower.contains("bpm") || lower.contains("sleep") || lower.contains("blood") || lower.contains("cardio") -> "Health"
+                lower.contains("watch") || lower.contains("pinetime") || lower.contains("ble") || lower.contains("hardware") || lower.contains("battery") -> "Hardware"
+                lower.contains("study") || lower.contains("exam") || lower.contains("code") || lower.contains("assignment") || lower.contains("work") || lower.contains("project") -> "Work"
+                else -> "Personal"
+            }
+
+            return Pair(tag, fact)
+        }
     }
 }

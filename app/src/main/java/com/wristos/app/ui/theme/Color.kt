@@ -2,27 +2,39 @@ package com.wristos.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary brand colors - Sleek Cyberpunk / Modern Dark Titanium
-val CyanPrimary = Color(0xFF00E5FF)
-val CyanPrimaryVariant = Color(0xFF00B0FF)
-val CyanOnPrimary = Color(0xFF001018)
+// Base OLED dark palette (matches web index.css)
+val DarkBackground = Color(0xFF06040D)       // Near-black OLED
+val DarkSurface = Color(0xFF140E29)          // Glass surface
+val DarkSurfaceElevated = Color(0xFF1C1535)  // Elevated card
+val DarkSurfaceVariant = Color(0xFF241D40)   // Variant surface
 
-val VioletSecondary = Color(0xFF7C4DFF)
-val VioletOnSecondary = Color(0xFF0D0029)
+val TextPrimary = Color(0xFFF8FAFC)          // Bright white
+val TextSecondary = Color(0xFFC4C4D8)        // Soft lavender-slate
+val TextTertiary = Color(0xFF6B7280)         // Muted gray
 
-val EmeraldSuccess = Color(0xFF00E676)
-val CoralWarning = Color(0xFFFF5252)
-val AmberAlert = Color(0xFFFFD600)
+val CardBorder = Color(0xFF2D2654)           // Subtle purple border
+val CardBorderHighlight = Color(0xFF7C3AED)  // Vivid purple highlight
 
-// Dark background palette
-val DarkBackground = Color(0xFF0A0E17)
-val DarkSurface = Color(0xFF121824)
-val DarkSurfaceElevated = Color(0xFF1A2234)
-val DarkSurfaceVariant = Color(0xFF222C42)
+// Status colors
+val EmeraldSuccess = Color(0xFF34D399)
+val CoralWarning = Color(0xFFF87171)
+val AmberAlert = Color(0xFFFBBF24)
 
-val TextPrimary = Color(0xFFF1F5F9)
-val TextSecondary = Color(0xFF94A3B8)
-val TextTertiary = Color(0xFF64748B)
+// Default Aurora Nebula accents
+val PurplePrimary = Color(0xFFA78BFA)
+val PurplePrimaryVariant = Color(0xFFC4B5FD)
+val PinkAccent = Color(0xFFEC4899)
+val PinkAccentLight = Color(0xFFF472B6)
 
-val CardBorder = Color(0xFF1E293B)
-val CardBorderHighlight = Color(0xFF334155)
+// Gradient colors for Brush usage
+val GradientPurple = Color(0xFF8B5CF6)
+val GradientPink = Color(0xFFEC4899)
+val GradientIndigo = Color(0xFF6366F1)
+val GradientCyan = Color(0xFF06B6D4)
+
+// Aliases
+val CyanPrimary = PurplePrimary
+val CyanPrimaryVariant = PurplePrimaryVariant
+val CyanOnPrimary = Color(0xFF06040D)
+val VioletSecondary = PinkAccent
+val VioletOnSecondary = Color(0xFF06040D)

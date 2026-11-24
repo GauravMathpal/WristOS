@@ -53,4 +53,36 @@ class AssistantActionParserTest {
         assertEquals("You have walked 4,500 steps today, keep going!", reply.replyText)
         assertTrue(reply.action is AssistantAction.None)
     }
+
+    @Test
+    fun testOfflineColloquialTaskParsing() {
+        val reply = client.generateOfflineResponse("i have complete xyz task by tmr 5pm")
+        assertTrue(reply.action is AssistantAction.CreateTask)
+        val task = reply.action as AssistantAction.CreateTask
+        assertEquals("Xyz task", task.title)
+        assertEquals("Tomorrow, 5:00 PM", task.dueTime)
+    }
+
+    @Test
+    fun testBareHourAndMilitaryTaskParsing() {
+        val (bareTitle, bareDue) = GeminiAssistantClient.extractTaskDetails("Finish assignment by 5")
+        assertEquals("Finish assignment", bareTitle)
+        assertEquals("Today, 5:00 PM", bareDue)
+
+        val (milTitle, milDue) = GeminiAssistantClient.extractTaskDetails("Submit report at 17:30")
+        assertEquals("Submit report", milTitle)
+        assertEquals("Today, 5:30 PM", milDue)
+    }
+
+    @Test
+    fun testFallbackWhenLlmOmitsActionTag() {
+        val reply = client.parseAssistantReply(
+            rawText = "I don't have that yet.",
+            userPrompt = "i have to finish reading by tonight"
+        )
+        assertTrue(reply.action is AssistantAction.CreateTask)
+        val task = reply.action as AssistantAction.CreateTask
+        assertEquals("Reading", task.title)
+        assertEquals("Tonight, 9:00 PM", task.dueTime)
+    }
 }
