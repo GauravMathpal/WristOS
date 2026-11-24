@@ -477,15 +477,23 @@ export function AssistantScreen() {
   }
 
   const handleClearMessages = () => {
+    stopSpeaking()
+    if (isListening) {
+      stopListening()
+    }
     setMessages([
       {
-        id: 'm-0',
+        id: `m-${Date.now()}`,
         role: 'assistant',
-        text: "Conversation cleared. How can I assist you with your day or watch metrics?",
+        text: "Chat cleared. What goals, tasks, or watch metrics can I help you with?",
         timestamp: Date.now(),
         isNew: false
       }
     ])
+    setLastSubmittedPrompt('')
+    setLastAssistantReply(null)
+    setInput('')
+    setInterimTranscript('')
   }
 
   // Quick prompt suggestions
@@ -594,10 +602,11 @@ export function AssistantScreen() {
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={handleClearMessages}
-            className="w-9 h-9 rounded-xl bg-[#161224] text-slate-400 border border-white/[0.08] hover:text-rose-400 hover:border-rose-500/30 transition-all flex items-center justify-center"
-            title="Clear Chat History"
+            className="px-3 py-1.5 rounded-xl bg-[#161224] text-slate-300 border border-white/[0.08] hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-all flex items-center gap-1.5 text-xs font-semibold shadow-sm"
+            title="Clear Chat History and start fresh"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Clear Chat</span>
           </motion.button>
         </div>
       </div>
@@ -909,9 +918,20 @@ export function AssistantScreen() {
               <Sparkles className="w-4 h-4 text-pink-400" />
               <h4 className="text-sm font-extrabold text-white">Conversation Stream</h4>
             </div>
-            <span className="text-[11px] font-mono text-purple-300 font-semibold">
-              {messages.length} messages
-            </span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-mono text-purple-300 font-semibold hidden sm:inline">
+                {messages.length} messages
+              </span>
+              <button
+                type="button"
+                onClick={handleClearMessages}
+                className="px-2.5 py-1 rounded-xl bg-purple-500/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-purple-500/20 hover:border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                title="Clear conversation and start fresh"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Clear Chat</span>
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Message List */}

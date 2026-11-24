@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wristos.app.core.voice.VoiceManager
 import com.wristos.app.data.ble.BleManagerProvider
-import com.wristos.app.data.ble.WatchBleManager
 import com.wristos.app.data.local.WristOSDatabase
 import com.wristos.app.data.local.memory.MemoryEntity
 import com.wristos.app.data.local.task.TaskEntity
@@ -54,6 +53,16 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun clearChat() {
+        voiceManager.stopSpeaking()
+        _messages.value = listOf(
+            AssistantMessage(
+                content = "Chat cleared. What goals, tasks, or watch metrics can I help you with?",
+                isUser = false
+            )
+        )
+    }
+
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isLoading.value) return
@@ -63,59 +72,53 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
         _isLoading.value = true
 
         viewModelScope.launch {
-            if (!geminiClient.isConfigured) {
-                val fallback = "Gemini API key is not configured. Add GEMINI_API_KEY in local.properties."
-                _messages.value = _messages.value + AssistantMessage(content = fallback, isUser = false)
-                voiceManager.speak(fallback)
-                _isLoading.value = false
-                return@launch
-            }
-
             val memories = database.memoryDao().getAllMemories().first().map { "${it.tag}: ${it.fact}" }
             val tasks = database.taskDao().getAllTasks().first().filter { !it.isCompleted }.map { it.title }
 
-            val result = geminiClient.generateResponse(
-                userPrompt = trimmed,
-                personalMemories = memories,
-                pendingTasks = tasks
-            )
-
-            result.onSuccess { reply ->
-                var actionNotice: String? = null
-
-                // Process smart actions
-                when (val action = reply.action) {
-                    is AssistantAction.CreateTask -> {
-                        database.taskDao().insertTask(
-                            TaskEntity(title = action.title, dueTime = action.dueTime)
-                        )
-                        actionNotice = "Task created: \"${action.title}\""
-                    }
-                    is AssistantAction.SaveMemory -> {
-                        database.memoryDao().insertMemory(
-                            MemoryEntity(tag = action.tag, fact = action.fact)
-                        )
-                        actionNotice = "Memory saved to ${action.tag}: \"${action.fact}\""
-                    }
-                    is AssistantAction.WatchAlert -> {
-                        bleManager.sendAlertNotification(action.message)
-                        actionNotice = "Sent alert to watch: \"${action.message}\""
-                    }
-                    AssistantAction.None -> {}
-                }
-
-                _messages.value = _messages.value + AssistantMessage(
-                    content = reply.replyText,
-                    isUser = false,
-                    actionNotification = actionNotice
+            val reply = if (geminiClient.isConfigured) {
+                val result = geminiClient.generateResponse(
+                    userPrompt = trimmed,
+                    personalMemories = memories,
+                    pendingTasks = tasks
                 )
-                voiceManager.speak(reply.replyText)
-            }.onFailure { err ->
-                val errorMsg = "AI Error: ${err.localizedMessage ?: "Could not connect to Gemini."}"
-                _messages.value = _messages.value + AssistantMessage(content = errorMsg, isUser = false)
-                voiceManager.speak(errorMsg)
+                result.getOrElse {
+                    // Fallback to offline smart reasoning if network or Gemini API fails
+                    geminiClient.generateOfflineResponse(trimmed, memories, tasks)
+                }
+            } else {
+                // Offline Smart Reasoning Engine runs with 0 latency
+                geminiClient.generateOfflineResponse(trimmed, memories, tasks)
             }
 
+            var actionNotice: String? = null
+
+            // Process smart actions
+            when (val action = reply.action) {
+                is AssistantAction.CreateTask -> {
+                    database.taskDao().insertTask(
+                        TaskEntity(title = action.title, dueTime = action.dueTime)
+                    )
+                    actionNotice = "Task created: \"${action.title}\""
+                }
+                is AssistantAction.SaveMemory -> {
+                    database.memoryDao().insertMemory(
+                        MemoryEntity(tag = action.tag, fact = action.fact)
+                    )
+                    actionNotice = "Memory saved to ${action.tag}: \"${action.fact}\""
+                }
+                is AssistantAction.WatchAlert -> {
+                    bleManager.sendAlertNotification(action.message)
+                    actionNotice = "Sent alert to watch: \"${action.message}\""
+                }
+                AssistantAction.None -> {}
+            }
+
+            _messages.value = _messages.value + AssistantMessage(
+                content = reply.replyText,
+                isUser = false,
+                actionNotification = actionNotice
+            )
+            voiceManager.speak(reply.replyText)
             _isLoading.value = false
         }
     }

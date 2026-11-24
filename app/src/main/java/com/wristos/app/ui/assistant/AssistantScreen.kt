@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeOff
@@ -97,26 +98,45 @@ fun AssistantScreen(viewModel: AssistantViewModel = viewModel()) {
                         color = TextPrimary
                     )
                     Text(
-                        text = if (viewModel.isGeminiConfigured) "Gemini 1.5 Flash • Memory Active" else "Offline • Key Required",
+                        text = if (viewModel.isGeminiConfigured) "Gemini 1.5 Flash • Memory Active" else "Smart Engine Active • Zero Latency",
                         fontSize = 11.sp,
-                        color = if (viewModel.isGeminiConfigured) EmeraldSuccess else CoralWarning,
+                        color = EmeraldSuccess,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            IconButton(
-                onClick = { viewModel.voiceManager.setTtsEnabled(!ttsEnabled) },
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(DarkSurfaceElevated, CircleShape)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = if (ttsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                    contentDescription = "TTS Voice",
-                    tint = if (ttsEnabled) CyanPrimary else TextTertiary,
-                    modifier = Modifier.size(18.dp)
-                )
+                IconButton(
+                    onClick = { viewModel.clearChat() },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(DarkSurfaceElevated, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Clear Chat",
+                        tint = TextTertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { viewModel.voiceManager.setTtsEnabled(!ttsEnabled) },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(DarkSurfaceElevated, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (ttsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                        contentDescription = "TTS Voice",
+                        tint = if (ttsEnabled) CyanPrimary else TextTertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
