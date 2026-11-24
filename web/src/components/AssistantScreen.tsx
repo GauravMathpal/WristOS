@@ -14,16 +14,15 @@ import {
   Zap, 
   CheckSquare, 
   Bell, 
-  ChevronRight,
-  Keyboard,
-  Camera,
-  Square,
   ChevronLeft,
   Pencil,
   BookOpen,
   AlertCircle,
   RefreshCw,
-  Radio
+  Radio,
+  Square,
+  RadioTower,
+  Trash2
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { BreathingOrb } from './BreathingOrb'
@@ -39,14 +38,15 @@ interface Message {
 }
 
 export function AssistantScreen() {
-  const { setActiveTab } = useAppStore()
+  const { setActiveTab, triggerWatchAiRemotely } = useAppStore()
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
   const [micError, setMicError] = useState<string | null>(null)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  
-  // Voice response defaults to false so assistant replies in chat 1st without speaking
+  const [remoteTriggerNotice, setRemoteTriggerNotice] = useState<string | null>(null)
+
+  // Voice response preference
   const [ttsEnabled, setTtsEnabled] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('wristos_tts_enabled') === 'true'
@@ -54,10 +54,36 @@ export function AssistantScreen() {
     return false
   })
   const [isLoading, setIsLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<'orb' | 'chat'>('orb')
 
-  // Ref to hold active SpeechRecognition instance
+  // Mobile mode switcher: 'orb' (Holographic Voice Center) or 'chat' (Full conversation stream)
+  const [mobileViewMode, setMobileViewMode] = useState<'orb' | 'chat'>('orb')
+
+  // Speech Recognition instance and silence timer ref
   const recognitionRef = useRef<any>(null)
+  const silenceTimeoutRef = useRef<any>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Web Audio chime synthesizer
+  const playWakeChime = (freq1 = 520, freq2 = 1040) => {
+    try {
+      // @ts-expect-error Web Audio API compatibility
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (AudioCtx) {
+        const ctx = new AudioCtx()
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(freq1, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(freq2, ctx.currentTime + 0.18)
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.28)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start()
+        osc.stop(ctx.currentTime + 0.28)
+      }
+    } catch (_) {}
+  }
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -71,12 +97,18 @@ export function AssistantScreen() {
         } catch (_) {}
         recognitionRef.current = null
       }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current)
+      }
     }
   }, [])
 
   // Listen for remote AI trigger event dispatched from watch over BLE or simulator
   useEffect(() => {
     const handleRemoteTrigger = () => {
+      playWakeChime(580, 1160)
+      setRemoteTriggerNotice("Watch initiated AI session • Listening for voice...")
+      setTimeout(() => setRemoteTriggerNotice(null), 4000)
       if (!isListening) {
         startListening()
       }
@@ -110,19 +142,15 @@ export function AssistantScreen() {
     {
       id: 'm-0',
       role: 'assistant',
-      text: "How can I help you today? Speak or type instructions to plan tasks, capture memories, or send wrist haptic alerts.",
+      text: "WristOS Intelligence is online. Tap the microphone or speak a command to plan tasks, capture memories, or dispatch watch haptic alerts.",
       timestamp: Date.now(),
       isNew: false
     }
   ])
 
-  const chatEndRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
-    if (viewMode === 'chat') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [messages, isLoading, viewMode])
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
 
   const speak = (text: string) => {
     if (!ttsEnabled || !('speechSynthesis' in window)) return
@@ -147,6 +175,10 @@ export function AssistantScreen() {
   }
 
   const stopListening = () => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop()
@@ -160,11 +192,27 @@ export function AssistantScreen() {
   const startListening = async () => {
     setMicError(null)
 
+    // 1. Proactively request microphone audio permissions if browser requires it
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        // Immediately release dummy stream so SpeechRecognition can bind to hardware mic
+        stream.getTracks().forEach(t => t.stop())
+      } catch (permErr: any) {
+        console.warn("Media stream mic check:", permErr)
+        if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+          setMicError("Microphone permission was blocked. Please click the lock icon in your browser URL bar, enable Microphone access, and try again.")
+          return
+        }
+      }
+    }
+
+    // 2. Instantiate Web Speech API
     // @ts-expect-error Webkit speech support
     const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition
 
     if (!SpeechClass) {
-      setMicError("Speech recognition is not natively supported in this browser. Please use Google Chrome, Edge, or Safari, or click any voice command button below.")
+      setMicError("Web Speech Recognition is not natively supported in this browser. Please use Google Chrome, Edge, or Safari, or click any voice command button below.")
       return
     }
 
@@ -177,10 +225,11 @@ export function AssistantScreen() {
     }
 
     try {
+      playWakeChime(440, 880)
       const recognition = new SpeechClass()
       recognitionRef.current = recognition
       recognition.lang = 'en-US'
-      recognition.continuous = false
+      recognition.continuous = true
       recognition.interimResults = true
       recognition.maxAlternatives = 1
 
@@ -204,35 +253,42 @@ export function AssistantScreen() {
           }
         }
 
-        if (currentInterim) {
-          setInterimTranscript(currentInterim)
-          setInput(currentInterim)
-        }
+        const candidateText = (currentFinal || currentInterim).trim()
 
-        if (currentFinal) {
-          const finalSpeech = currentFinal.trim()
-          setInput(finalSpeech)
-          setInterimTranscript('')
-          setIsListening(false)
-          if (recognitionRef.current) {
-            try { recognitionRef.current.stop() } catch (_) {}
-            recognitionRef.current = null
+        if (candidateText) {
+          setInterimTranscript(candidateText)
+          setInput(candidateText)
+
+          // Auto-submit after 1.6s of silence after capturing candidate speech
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current)
           }
-          handleSend(finalSpeech)
+          silenceTimeoutRef.current = setTimeout(() => {
+            const finalSpeech = candidateText
+            setIsListening(false)
+            setInterimTranscript('')
+            if (recognitionRef.current) {
+              try { recognitionRef.current.stop() } catch (_) {}
+              recognitionRef.current = null
+            }
+            handleSend(finalSpeech)
+          }, 1600)
         }
       }
 
       // @ts-expect-error speech event
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error)
-        setIsListening(false)
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          setIsListening(false)
           setMicError("Microphone permission blocked. Click the microphone/lock icon in your browser URL bar and choose 'Allow', then click the mic button again.")
         } else if (event.error === 'no-speech') {
-          setMicError("No speech detected. Please speak clearly into your microphone.")
+          // Keep listening for natural pause
         } else if (event.error === 'network') {
-          setMicError("Speech recognition network timeout. You can still speak again, type, or click the quick voice presets below.")
+          setIsListening(false)
+          setMicError("Speech recognition network timeout. You can speak again, type, or click the quick voice presets below.")
         } else if (event.error !== 'aborted') {
+          setIsListening(false)
           setMicError(`Voice recognition: ${event.error}`)
         }
       }
@@ -268,12 +324,17 @@ export function AssistantScreen() {
       setIsListening(false)
       setInterimTranscript('')
       handleSend(command)
-    }, 500)
+    }, 450)
   }
 
   const handleSend = async (manualText?: string) => {
     const textToSend = manualText || input
     if (!textToSend.trim() || isLoading) return
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
 
     const userMessage: Message = {
       id: `u-${Date.now()}`,
@@ -285,7 +346,6 @@ export function AssistantScreen() {
     setMessages((prev) => [...prev.map(m => ({ ...m, isNew: false })), userMessage])
     setInput('')
     setIsLoading(true)
-    setViewMode('chat')
 
     try {
       const pendingTaskTitles = tasks.filter((t: TaskRecord) => !t.isCompleted).map((t: TaskRecord) => t.title)
@@ -328,40 +388,89 @@ export function AssistantScreen() {
     }
   }
 
-  // Quick suggestions directly matching reference mockup Screen 2
+  const handleClearMessages = () => {
+    setMessages([
+      {
+        id: 'm-0',
+        role: 'assistant',
+        text: "Conversation cleared. How can I assist you with your day or watch metrics?",
+        timestamp: Date.now(),
+        isNew: false
+      }
+    ])
+  }
+
+  // Quick prompt suggestions
   const suggestions = [
     { title: 'Plan my day', query: 'Plan my day and review pending tasks', icon: Pencil },
-    { title: 'Add a task', query: 'Add a task: Finish project presentation by 6:00 PM', icon: CheckSquare },
+    { title: 'Add a task', query: 'Add a task: Review firmware tests by 5:00 PM', icon: CheckSquare },
     { title: 'Set a reminder', query: 'Set a reminder to drink water in 30 minutes', icon: Bell },
-    { title: 'Remember this', query: 'Remember that my focus priority is C programming', icon: BookOpen }
+    { title: 'Save to Vault', query: 'Remember that my priority is C++ FreeRTOS firmware', icon: BookOpen }
   ]
 
   const orbState = isListening ? 'listening' : isLoading ? 'thinking' : isSpeaking ? 'speaking' : 'idle'
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)] max-w-md mx-auto w-full relative">
+    <div className="w-full max-w-6xl mx-auto h-[calc(100vh-7.8rem)] flex flex-col space-y-4 pb-4">
       
-      {/* Top Header Card (Matching Mockup Screen 2) */}
-      <div className="flex items-center justify-between py-2 px-1 mb-2 shrink-0">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.94 }}
-          onClick={() => setActiveTab('dashboard')}
-          className="w-10 h-10 rounded-full bg-[#161224] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md"
-          title="Back to Home"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </motion.button>
+      {/* 1. TOP HEADER & MOBILE SWITCHER BAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-[#140e29]/75 border border-purple-500/20 backdrop-blur-xl shadow-lg shrink-0">
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.94 }}
+            onClick={() => setActiveTab('dashboard')}
+            className="w-10 h-10 rounded-2xl bg-[#1c133a] border border-white/[0.1] flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-md shrink-0"
+            title="Back to Dashboard"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </motion.button>
 
-        <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-          <span>AI Assistant</span>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
-            Voice Ready
-          </span>
-        </h2>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                <span>WristOS AI Intelligence</span>
+              </h2>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                isListening
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                  : isLoading
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+              }`}>
+                {isListening ? 'Listening' : isLoading ? 'Synthesizing' : isSpeaking ? 'Speaking' : 'Voice Ready'}
+              </span>
+            </div>
+            <p className="text-[11px] text-purple-300/80 font-medium">
+              Multimodal assistant powered by Gemini 3.8 Flash • Watch-to-phone bidirectional bridge
+            </p>
+          </div>
+        </div>
 
-        <div className="flex items-center gap-2">
-          {/* Active "Stop Voice" button when AI is speaking */}
+        {/* Action Controls & Mobile Tab Toggle */}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          
+          {/* Mobile Orb vs Chat View Toggle (< lg screens) */}
+          <div className="lg:hidden flex items-center p-1 rounded-xl bg-[#0e091e] border border-white/10 text-xs font-bold">
+            <button
+              onClick={() => setMobileViewMode('orb')}
+              className={`px-3 py-1 rounded-lg transition-all ${
+                mobileViewMode === 'orb' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Voice Orb
+            </button>
+            <button
+              onClick={() => setMobileViewMode('chat')}
+              className={`px-3 py-1 rounded-lg transition-all ${
+                mobileViewMode === 'chat' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Chat ({messages.length})
+            </button>
+          </div>
+
+          {/* Active Stop Button when AI is speaking */}
           <AnimatePresence>
             {isSpeaking && (
               <motion.button
@@ -370,99 +479,109 @@ export function AssistantScreen() {
                 exit={{ scale: 0.9, opacity: 0 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={stopSpeaking}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse"
-                title="Stop AI Voice"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse"
+                title="Stop Speaking"
               >
-                <Square className="w-3 h-3 fill-current" />
-                <span>Stop</span>
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span>Stop Voice</span>
               </motion.button>
             )}
           </AnimatePresence>
 
+          {/* TTS Read-Aloud Toggle */}
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={toggleTts}
-            className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center ${
+            className={`w-9 h-9 rounded-xl border transition-all flex items-center justify-center ${
               ttsEnabled 
                 ? 'bg-purple-500/20 text-pink-300 border-pink-500/40 shadow-sm' 
                 : 'bg-[#161224] text-slate-400 border-white/[0.08] hover:text-white'
             }`}
-            title={ttsEnabled ? "Voice Auto-Reply: ON (Speaking responses aloud)" : "Voice Auto-Reply: OFF (Replies in chat only)"}
+            title={ttsEnabled ? "Voice Auto-Reply: ON (Speaking aloud)" : "Voice Auto-Reply: OFF (Text only)"}
           >
             {ttsEnabled ? <Volume2 className="w-4 h-4 text-pink-400" /> : <VolumeX className="w-4 h-4" />}
+          </motion.button>
+
+          {/* Clear Messages */}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleClearMessages}
+            className="w-9 h-9 rounded-xl bg-[#161224] text-slate-400 border border-white/[0.08] hover:text-rose-400 hover:border-rose-500/30 transition-all flex items-center justify-center"
+            title="Clear Chat History"
+          >
+            <Trash2 className="w-4 h-4" />
           </motion.button>
         </div>
       </div>
 
-      {/* Mic Error Banner (With clear instruction & retry) */}
+      {/* 2. REMOTE WATCH TRIGGER BANNER */}
+      <AnimatePresence>
+        {remoteTriggerNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-cyan-500/20 border border-emerald-500/40 text-emerald-200 text-xs shadow-xl backdrop-blur-xl flex items-center justify-between shrink-0"
+          >
+            <div className="flex items-center gap-2.5">
+              <RadioTower className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span className="font-bold text-white tracking-wide">{remoteTriggerNotice}</span>
+            </div>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-100">
+              BLE 0xAA OK
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. MIC ERROR BANNER */}
       <AnimatePresence>
         {micError && (
           <motion.div
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            className="mb-3 p-3 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-200 text-xs shadow-lg backdrop-blur-xl flex items-start gap-2.5 shrink-0"
+            className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs shadow-xl backdrop-blur-xl flex items-start justify-between gap-3 shrink-0"
           >
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <div className="flex-1 space-y-1.5">
-              <p className="font-semibold leading-relaxed">{micError}</p>
-              <div className="flex items-center gap-2 pt-0.5">
-                <button
-                  onClick={() => {
-                    setMicError(null)
-                    startListening()
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-rose-500/25 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 font-bold text-[11px] flex items-center gap-1 transition-all"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Retry Mic</span>
-                </button>
-                <button
-                  onClick={() => setMicError(null)}
-                  className="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-[11px] font-medium transition-all"
-                >
-                  Dismiss
-                </button>
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold leading-relaxed">{micError}</p>
+                <p className="text-[11px] text-rose-300/80 mt-0.5">
+                  Tip: You can click the one-tap preset buttons below to test voice actions instantly.
+                </p>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Live Voice HUD Status (Shows speech as user speaks) */}
-      <AnimatePresence>
-        {isListening && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.95 }}
-            className="mb-3 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-rose-500/20 via-pink-500/20 to-purple-500/20 border border-rose-500/40 text-rose-200 text-xs shadow-[0_0_20px_rgba(244,63,94,0.35)] flex items-center justify-between shrink-0"
-          >
-            <div className="flex items-center gap-2 truncate">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping shrink-0" />
-              <span className="font-bold text-[11px] uppercase tracking-wider text-rose-300 shrink-0">Listening:</span>
-              <span className="font-mono text-white text-xs truncate">
-                {interimTranscript ? `"${interimTranscript}"` : "Speak clearly now..."}
-              </span>
-            </div>
             <button
-              onClick={stopListening}
-              className="px-2 py-0.5 rounded-lg bg-rose-500/30 hover:bg-rose-500/50 text-white text-[10px] font-bold uppercase shrink-0 transition-colors"
+              onClick={() => {
+                setMicError(null)
+                startListening()
+              }}
+              className="px-3 py-1 rounded-xl bg-rose-500/25 hover:bg-rose-500/40 text-white font-bold text-xs border border-rose-500/40 shrink-0 flex items-center gap-1"
             >
-              Done
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry</span>
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Main Interactive Stage */}
-      <div className="flex-1 overflow-y-auto px-1 sm:px-2 scrollbar-none">
-        {viewMode === 'orb' ? (
-          /* HOLOGRAPHIC ORB HERO VIEW (Matching Reference Mockup Screen 2) */
-          <div className="flex flex-col items-center justify-center min-h-full py-2 space-y-4 text-center select-none">
-            
-            {/* Massive Glowing Holographic Orb */}
-            <div className="relative py-1">
+      {/* 4. MAIN RESPONSIVE COCKPIT: LEFT (ORB & VOICE HUD) | RIGHT (CHAT & ACTIONS) */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 items-stretch">
+        
+        {/* ========================================================= */}
+        {/* LEFT COLUMN: HOLOGRAPHIC ORB & VOICE COMMAND CENTER       */}
+        {/* ========================================================= */}
+        <div className={`lg:col-span-5 flex flex-col justify-between p-6 rounded-3xl bg-[#140e29]/75 border border-purple-500/25 backdrop-blur-xl shadow-2xl relative overflow-hidden ${
+          mobileViewMode === 'chat' ? 'hidden lg:flex' : 'flex'
+        }`}>
+          
+          {/* Ambient Glow Orb Backdrop */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-purple-600/15 blur-[80px] pointer-events-none" />
+
+          {/* Central Breathing Orb */}
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 my-auto select-none">
+            <div className="relative">
               <BreathingOrb 
                 size="lg" 
                 state={orbState}
@@ -470,86 +589,77 @@ export function AssistantScreen() {
               />
             </div>
 
-            <div className="space-y-1 max-w-sm">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
-                How can I help you today?
-              </h2>
-              <p className="text-xs text-purple-200/80 font-medium">
-                Tap the microphone or choose an action below to get started.
+            <div>
+              <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
+                {isListening ? "Listening for command..." : isLoading ? "Thinking..." : "How can I help you?"}
+              </h3>
+              <p className="text-xs text-purple-200/80 font-medium mt-1">
+                {isListening 
+                  ? "Speak clearly into your microphone" 
+                  : "Tap the mic below or trigger directly from your watch"}
               </p>
             </div>
 
-            {/* 4 Action Rows (Matching Reference Mockup Screen 2) */}
-            <div className="w-full max-w-md space-y-2 pt-0.5">
-              {suggestions.map((s, idx) => {
-                const Icon = s.icon
-                return (
-                  <motion.button
-                    key={s.title}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.04 * idx, duration: 0.3 }}
-                    whileHover={{ scale: 1.01, x: 2 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSend(s.query)}
-                    className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-[#161224] hover:bg-[#1f1933] border border-white/[0.08] hover:border-purple-500/40 text-left transition-all group shadow-md"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/20 flex items-center justify-center transition-colors shrink-0">
-                        <Icon className="w-4 h-4 text-slate-300 group-hover:text-white" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-100">{s.title}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors shrink-0" />
-                  </motion.button>
-                )
-              })}
+            {/* LIVE ANIMATED AUDIO EQUALIZER SOUNDWAVE BARS */}
+            <div className="flex items-center justify-center gap-1 h-8 pt-1">
+              {[30, 65, 45, 90, 70, 100, 85, 95, 60, 75, 40, 80].map((h, i) => (
+                <motion.div
+                  key={i}
+                  animate={isListening || isSpeaking ? { 
+                    height: [`${h * 0.3}%`, `${h}%`, `${h * 0.6}%`, `${h * 0.9}%`] 
+                  } : { height: '18%' }}
+                  transition={{ 
+                    duration: isListening ? 0.9 : 1.4, 
+                    repeat: Infinity, 
+                    delay: i * 0.08,
+                    ease: "easeInOut"
+                  }}
+                  className={`w-1.5 rounded-full transition-all ${
+                    isListening 
+                      ? 'bg-gradient-to-t from-rose-500 via-pink-500 to-amber-400' 
+                      : isSpeaking 
+                      ? 'bg-gradient-to-t from-purple-500 to-cyan-400' 
+                      : 'bg-purple-500/25'
+                  }`}
+                />
+              ))}
             </div>
 
-            {/* Voice Command Quick Chips (One-tap Voice Simulation & Testing) */}
-            <div className="w-full max-w-md pt-1 pb-1">
-              <div className="flex items-center justify-between px-1 mb-1.5">
-                <span className="text-[11px] font-bold text-purple-300/80 uppercase tracking-wider flex items-center gap-1.5">
-                  <Radio className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
-                  <span>One-Tap Voice Commands</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">Live Demo</span>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { label: 'Plan My Day', cmd: 'Plan my day and review pending tasks' },
-                  { label: 'Add 5 PM Task', cmd: 'Add a task: Review PRs and firmware tests by 5 PM' },
-                  { label: 'Ping Watch', cmd: 'Send haptic alert to watch' },
-                  { label: 'Remember Goal', cmd: 'Remember that health focus is 8000 daily steps' },
-                ].map((chip) => (
-                  <button
-                    key={chip.label}
-                    onClick={() => handleSimulateVoice(chip.cmd)}
-                    className="px-2.5 py-2 rounded-xl bg-[#140e29]/90 hover:bg-purple-500/20 border border-purple-500/25 hover:border-pink-500/40 text-[11px] text-purple-200 font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] text-left truncate flex items-center gap-1.5 shadow-sm"
-                    title={chip.cmd}
-                  >
-                    <span className="text-pink-400">🎙️</span>
-                    <span className="truncate">{chip.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Real-time Interim Speech Transcript HUD */}
+            <AnimatePresence>
+              {isListening && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="px-4 py-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs font-mono max-w-xs truncate shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+                >
+                  <span className="text-rose-400 font-bold mr-1.5">●</span>
+                  {interimTranscript ? `"${interimTranscript}"` : "Waiting for speech..."}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-            {/* Floating Central Glowing Mic Button (Matching Mockup Screen 2) */}
-            <div className="pt-1 flex items-center justify-center gap-6">
+          {/* Tactile Microphone & Watch Wake Controls */}
+          <div className="space-y-4 pt-3 border-t border-white/[0.06] relative z-10">
+            
+            {/* Big Tactile Glowing Mic Button */}
+            <div className="flex items-center justify-center gap-5">
               <motion.button
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
-                onClick={() => setViewMode('chat')}
-                className="p-3 rounded-2xl bg-purple-500/10 text-purple-300 border border-purple-500/20 hover:bg-purple-500/20 transition-all"
-                title="Open Keyboard"
+                onClick={triggerWatchAiRemotely}
+                className="px-3.5 py-2.5 rounded-2xl bg-[#1c133a] hover:bg-[#251a4d] border border-cyan-500/30 text-cyan-300 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                title="Simulate Watch-to-Phone BLE 0xAA wake trigger"
               >
-                <Keyboard className="w-5 h-5" />
+                <RadioTower className="w-4 h-4 text-cyan-400" />
+                <span>Watch Wake Test</span>
               </motion.button>
 
               <motion.button
                 whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={toggleMic}
                 className={`relative w-16 h-16 rounded-full text-white flex items-center justify-center border-2 border-white/30 transition-all ${
                   isListening
@@ -561,52 +671,90 @@ export function AssistantScreen() {
                 {/* Pulsating halo */}
                 <motion.div
                   animate={{ scale: [1, 1.45, 1], opacity: [0.7, 0, 0.7] }}
-                  transition={{ repeat: Infinity, duration: isListening ? 1.2 : 2, ease: 'easeInOut' }}
+                  transition={{ repeat: Infinity, duration: isListening ? 1.2 : 2.5, ease: 'easeInOut' }}
                   className={`absolute inset-0 rounded-full border-2 pointer-events-none ${
                     isListening ? 'border-rose-300' : 'border-pink-400'
                   }`}
                 />
                 {isListening ? <MicOff className="w-7 h-7 text-white" /> : <Mic className="w-7 h-7 text-white" />}
               </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                onClick={() => useAppStore.getState().sendWatchAlert("AI Photo Memo")}
-                className="p-3 rounded-2xl bg-purple-500/10 text-cyan-300 border border-purple-500/20 hover:bg-purple-500/20 transition-all"
-                title="Camera Capture"
-              >
-                <Camera className="w-5 h-5" />
-              </motion.button>
             </div>
+
+            {/* One-Tap Voice Presets */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold text-purple-300/80 uppercase tracking-wider flex items-center gap-1">
+                  <Radio className="w-3 h-3 text-pink-400" /> Quick Voice Commands
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">1-Tap</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Plan My Day', cmd: 'Plan my day and review pending tasks' },
+                  { label: 'Add 5 PM Task', cmd: 'Add a task: Review firmware tests by 5 PM' },
+                  { label: 'Ping Watch', cmd: 'Send haptic alert to watch' },
+                  { label: 'Save Goal', cmd: 'Remember that health focus is 10000 daily steps' },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    onClick={() => handleSimulateVoice(chip.cmd)}
+                    className="px-2.5 py-1.5 rounded-xl bg-[#16102c]/90 hover:bg-purple-500/20 border border-purple-500/20 text-[11px] text-purple-200 font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] text-left truncate flex items-center gap-1.5"
+                    title={chip.cmd}
+                  >
+                    <span className="text-pink-400 shrink-0">🎙️</span>
+                    <span className="truncate">{chip.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </div>
-        ) : (
-          /* CHAT CONVERSATION VIEW */
-          <div className="space-y-4 py-3">
+
+        </div>
+
+        {/* ========================================================= */}
+        {/* RIGHT COLUMN: INTERACTIVE CONVERSATION THREAD             */}
+        {/* ========================================================= */}
+        <div className={`lg:col-span-7 flex flex-col justify-between p-6 rounded-3xl bg-[#140e29]/75 border border-purple-500/25 backdrop-blur-xl shadow-2xl min-h-0 ${
+          mobileViewMode === 'orb' ? 'hidden lg:flex' : 'flex'
+        }`}>
+          
+          {/* Conversation Header */}
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-pink-400" />
+              <h4 className="text-sm font-extrabold text-white">Conversation Stream</h4>
+            </div>
+            <span className="text-[11px] font-mono text-purple-300 font-semibold">
+              {messages.length} messages
+            </span>
+          </div>
+
+          {/* Scrollable Message List */}
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 scrollbar-thin scrollbar-thumb-purple-500/20">
             <AnimatePresence initial={false}>
               {messages.map((m) => (
                 <motion.div
                   key={m.id}
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22 }}
-                  className={`flex gap-3 max-w-xl ${m.role === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
+                  transition={{ duration: 0.2 }}
+                  className={`flex gap-3 ${m.role === 'user' ? 'ml-auto justify-end max-w-lg' : 'mr-auto justify-start max-w-xl'}`}
                 >
                   {m.role === 'assistant' && (
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500/30 to-pink-500/20 border border-purple-400/40 text-purple-300 flex items-center justify-center shrink-0 mt-1 shadow-[0_0_15px_rgba(168,85,247,0.35)]">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500/30 to-pink-500/20 border border-purple-400/40 text-purple-300 flex items-center justify-center shrink-0 mt-1 shadow-md">
                       <Sparkles className="w-4 h-4 text-pink-300" />
                     </div>
                   )}
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 max-w-full">
                     <div
-                      className={`p-4 rounded-3xl text-xs sm:text-sm leading-relaxed ${
+                      className={`p-4 rounded-3xl text-xs sm:text-sm leading-relaxed break-words ${
                         m.role === 'user'
                           ? 'bg-gradient-to-r from-purple-600 via-violet-600 to-pink-600 text-white font-medium rounded-tr-sm shadow-xl shadow-purple-950/40 border border-purple-400/30'
                           : 'bg-gradient-to-b from-[#1c123b]/90 via-[#130d29]/85 to-[#0b081d]/95 border border-purple-500/25 text-slate-100 rounded-tl-sm shadow-lg shadow-purple-950/20 backdrop-blur-xl'
                       }`}
                     >
-                      {/* Word-by-word reveal on assistant response */}
                       {m.role === 'assistant' ? (
                         <WordReveal text={m.text} animate={m.isNew} speed={25} />
                       ) : (
@@ -614,7 +762,7 @@ export function AssistantScreen() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {m.role === 'assistant' && (
                         <button
                           onClick={() => {
@@ -624,7 +772,7 @@ export function AssistantScreen() {
                               speak(m.text)
                             }
                           }}
-                          className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-300/80 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-lg bg-[#140e29] border border-purple-500/20 hover:border-purple-500/40"
+                          className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-300 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-lg bg-[#140e29] border border-purple-500/20 hover:border-purple-500/40"
                           title={isSpeaking ? "Stop Voice" : "Listen to response"}
                         >
                           {isSpeaking ? (
@@ -661,7 +809,7 @@ export function AssistantScreen() {
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex items-center gap-3"
+                className="flex items-center gap-3 pt-1"
               >
                 <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-300">
                   <Sparkles className="w-4 h-4 animate-spin text-pink-400" />
@@ -675,73 +823,72 @@ export function AssistantScreen() {
 
             <div ref={chatEndRef} />
           </div>
-        )}
-      </div>
 
-      {/* Bottom Floating Input Bar */}
-      <div className="pt-2 shrink-0 space-y-2">
-        {/* Quick Voice Chips above input when in Chat View */}
-        {viewMode === 'chat' && (
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-            <span className="text-[10px] font-bold text-purple-300/70 uppercase tracking-wider shrink-0 flex items-center gap-1">
-              <Radio className="w-3 h-3 text-pink-400" /> Voice:
-            </span>
-            {[
-              { label: 'Plan Day', cmd: 'Plan my day and review pending tasks' },
-              { label: 'Add Task', cmd: 'Add a task: Review PRs by 5 PM' },
-              { label: 'Ping Watch', cmd: 'Send haptic alert to watch' },
-              { label: 'Remember', cmd: 'Remember: Project deadline is tomorrow' },
-            ].map((chip) => (
-              <button
-                key={chip.label}
-                onClick={() => handleSimulateVoice(chip.cmd)}
-                className="px-2 py-0.5 rounded-lg bg-[#161224] hover:bg-purple-500/20 border border-purple-500/25 text-[10px] text-purple-200 font-medium transition-all shrink-0 hover:scale-105 active:scale-95"
+          {/* Quick Suggestions & Input Bar */}
+          <div className="pt-3 shrink-0 space-y-2 border-t border-white/[0.06]">
+            
+            {/* Quick Suggestion Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+              {suggestions.map((s) => {
+                const Icon = s.icon
+                return (
+                  <button
+                    key={s.title}
+                    onClick={() => handleSend(s.query)}
+                    className="px-2.5 py-1 rounded-xl bg-[#140e29] hover:bg-purple-500/20 border border-purple-500/20 text-[11px] text-slate-300 hover:text-white font-medium transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Icon className="w-3 h-3 text-purple-400" />
+                    <span>{s.title}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Smart Message Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSend()
+              }}
+              className="relative flex items-center p-2 rounded-2xl border border-purple-500/30 bg-[#0d091e] backdrop-blur-2xl shadow-xl"
+            >
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.92 }}
+                onClick={toggleMic}
+                className={`p-2.5 rounded-xl transition-all mr-2 shrink-0 ${
+                  isListening
+                    ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_12px_#f43f5e]'
+                    : 'bg-purple-500/15 text-pink-300 hover:bg-purple-500/25 border border-purple-500/30'
+                }`}
+                title={isListening ? "Stop listening" : "Click to speak voice command"}
               >
-                🎙️ {chip.label}
-              </button>
-            ))}
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </motion.button>
+
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isListening ? (interimTranscript ? `"${interimTranscript}"` : "Listening to your voice...") : "Ask anything or command WristOS..."}
+                className="flex-1 bg-transparent border-none text-xs sm:text-sm text-slate-100 placeholder:text-purple-300/50 focus:outline-none px-2"
+              />
+
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
+                disabled={!input.trim() || isLoading}
+                className="p-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:brightness-110 disabled:opacity-40 transition-all shadow-md shadow-purple-500/30 shrink-0 ml-1"
+              >
+                <Send className="w-4 h-4" />
+              </motion.button>
+            </form>
+
           </div>
-        )}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            handleSend()
-          }}
-          className="relative flex items-center p-2 rounded-2xl border border-purple-500/30 bg-gradient-to-r from-[#191136]/90 via-[#130d29]/85 to-[#0b081d]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40"
-        >
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.92 }}
-            onClick={toggleMic}
-            className={`p-2.5 rounded-xl transition-all mr-2 ${
-              isListening
-                ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_12px_#f43f5e]'
-                : 'bg-purple-500/15 text-pink-300 hover:bg-purple-500/25 border border-purple-500/30'
-            }`}
-            title={isListening ? "Stop listening" : "Click to speak voice command"}
-          >
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </motion.button>
+        </div>
 
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? (interimTranscript ? `"${interimTranscript}"` : "Listening to your voice...") : "Ask anything or command WristOS..."}
-            className="flex-1 bg-transparent border-none text-xs sm:text-sm text-slate-100 placeholder:text-purple-300/60 focus:outline-none px-2"
-          />
-
-          <motion.button
-            type="submit"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.92 }}
-            disabled={!input.trim() || isLoading}
-            className="p-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:brightness-110 disabled:opacity-40 transition-all shadow-md shadow-purple-500/30 shrink-0 ml-1"
-          >
-            <Send className="w-4 h-4" />
-          </motion.button>
-        </form>
       </div>
 
     </div>

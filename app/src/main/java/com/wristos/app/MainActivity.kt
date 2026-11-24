@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
                 MainScreen()
             }
         }
+
+        if (intent?.action == "com.wristos.app.TRIGGER_AI") {
+            BleManagerProvider.getInstance(this).triggerAiManually()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

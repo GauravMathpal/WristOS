@@ -121,7 +121,7 @@ class WatchBleService {
           INFINITIME_SERVICES.EVENT_TRIGGER,
           (val) => {
             const raw = dataViewToNumbers(val)
-            if (raw.length > 0 && raw[0] === 0xAA) {
+            if (raw.length > 0 && (raw[0] === 0xAA || (raw[0] & 0xFF) === 0xAA || raw[0] === -86)) {
               onAiTrigger?.()
             }
           }
@@ -289,7 +289,7 @@ class WatchBleService {
       await evtChar.startNotifications()
       evtChar.addEventListener('characteristicvaluechanged', (ev: any) => {
         const val: DataView = ev.target.value
-        if (val.byteLength > 0 && val.getUint8(0) === 0xAA) {
+        if (val.byteLength > 0 && (val.getUint8(0) === 0xAA || (val.getUint8(0) & 0xFF) === 0xAA || val.getInt8(0) === -86)) {
           onAiTrigger?.()
         }
       })

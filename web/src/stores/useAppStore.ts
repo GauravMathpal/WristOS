@@ -146,6 +146,7 @@ interface AppState {
   disconnectWatch: () => Promise<void>
   syncWatchTelemetry: () => Promise<void>
   sendWatchAlert: (msg?: string) => Promise<void>
+  triggerWatchAiRemotely: () => void
 }
 
 let simulationHeartbeat: number | null = null
@@ -315,8 +316,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         },
         () => {
-          set({ activeTab: 'assistant' })
-          window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
+          set({ activeTab: 'assistant', viewMode: 'app' })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
+          }
         }
       )
       set((state) => ({
@@ -424,6 +427,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       await watchBleService.sendAlert(msg)
     } catch {
       // Handled by virtual watch state
+    }
+  },
+
+  triggerWatchAiRemotely: () => {
+    set({ activeTab: 'assistant', viewMode: 'app' })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wristos-ai-trigger'))
     }
   }
 }))
