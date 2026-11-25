@@ -217,20 +217,20 @@ export const Slide12Conclusion: React.FC<SlideProps> = ({ isActive }) => {
 
           <div className="relative flex items-center justify-center gap-2 md:gap-3">
             <div className="s12-phone-float rounded-[24px] md:rounded-[28px] p-1.5 bg-[#161322] border border-violet-400/35 shadow-[0_24px_60px_rgba(0,0,0,0.85)] relative">
-              <div className="relative w-[132px] h-[276px] md:w-[178px] md:h-[372px] rounded-[18px] md:rounded-[22px] overflow-hidden bg-black">
+              <div className="relative w-[132px] md:w-[174px] aspect-[412/892] rounded-[18px] md:rounded-[22px] overflow-hidden bg-black">
                 <img
                   ref={phoneImgRef}
                   src={pair.phone}
                   alt="WristOS Phone App"
-                  className="w-full h-full object-cover object-top"
+                  className="w-full h-full object-contain"
                 />
                 {pair.hasOrb && (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
-                    style={{ left: '46.6%', top: '40.4%' }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none w-[54%] aspect-square flex items-center justify-center"
+                    style={{ left: '49.8%', top: '43.9%' }}
                   >
                     <div
-                      className="s12-orb-pulse w-20 h-20 md:w-28 md:h-28 rounded-full mix-blend-screen blur-lg opacity-55"
+                      className="s12-orb-pulse w-full h-full rounded-full mix-blend-screen blur-lg opacity-55"
                       style={{
                         background:
                           'radial-gradient(circle, rgba(192,132,252,0.85) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',

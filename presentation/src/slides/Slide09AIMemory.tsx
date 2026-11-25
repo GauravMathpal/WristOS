@@ -44,9 +44,9 @@ export const Slide09AIMemory: React.FC<SlideProps> = ({ isActive }) => {
       })
       gsap.fromTo(
         '.s9a-orb-ring',
-        { scale: 0.88, opacity: 0.75 },
+        { scale: 1, opacity: 0.7 },
         {
-          scale: 1.65,
+          scale: 1.58,
           opacity: 0,
           duration: 2.2,
           stagger: 1.1,
@@ -107,18 +107,18 @@ export const Slide09AIMemory: React.FC<SlideProps> = ({ isActive }) => {
 
             {/* Breathing Aura + Outward Sonar Rings centered strictly on the App AI Orb */}
             <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
-              style={{ left: '34.9%', top: '35.85%' }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none w-[15.2%] aspect-square flex items-center justify-center"
+              style={{ left: '35.8%', top: '39.1%' }}
             >
               <div
-                className="s9a-orb-glow w-24 h-24 md:w-32 md:h-32 rounded-full mix-blend-screen opacity-55 blur-xl"
+                className="s9a-orb-glow w-full h-full rounded-full mix-blend-screen opacity-55 blur-xl"
                 style={{
                   background:
                     'radial-gradient(circle, rgba(192,132,252,0.8) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',
                 }}
               />
-              <div className="s9a-orb-ring absolute w-20 h-20 md:w-[116px] md:h-[116px] rounded-full border border-violet-300/75" />
-              <div className="s9a-orb-ring absolute w-20 h-20 md:w-[116px] md:h-[116px] rounded-full border border-pink-300/60" />
+              <div className="s9a-orb-ring absolute inset-0 rounded-full border border-violet-300/75" />
+              <div className="s9a-orb-ring absolute inset-0 rounded-full border border-pink-300/60" />
             </div>
           </div>
 

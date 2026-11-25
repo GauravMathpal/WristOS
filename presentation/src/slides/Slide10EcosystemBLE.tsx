@@ -183,23 +183,23 @@ export const Slide10EcosystemBLE: React.FC<SlideProps> = ({ isActive }) => {
             <img
               src="./app/app_mobile_dashboard.png"
               alt="Mobile Companion Dashboard"
-              className="w-[140px] h-[296px] md:w-[185px] md:h-[390px] rounded-[18px] md:rounded-[20px] object-cover object-top"
+              className="w-[140px] md:w-[182px] aspect-[412/892] rounded-[18px] md:rounded-[20px] object-contain bg-black"
             />
           </div>
 
           <div className="s10e-float-b rounded-[22px] md:rounded-[26px] p-1.5 bg-[#161322] border border-violet-400/35 shadow-2xl translate-y-3 md:translate-y-4 relative">
-            <div className="relative w-[140px] h-[296px] md:w-[185px] md:h-[390px] rounded-[18px] md:rounded-[20px] overflow-hidden">
+            <div className="relative w-[140px] md:w-[182px] aspect-[412/892] rounded-[18px] md:rounded-[20px] overflow-hidden bg-black">
               <img
                 src="./app/app_mobile_ai.png"
                 alt="Mobile AI Voice Assistant"
-                className="w-full h-full object-cover object-top"
+                className="w-full h-full object-contain"
               />
               <div
-                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
-                style={{ left: '46.6%', top: '40.4%' }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none w-[54%] aspect-square flex items-center justify-center"
+                style={{ left: '49.8%', top: '43.9%' }}
               >
                 <div
-                  className="s10e-mob-orb w-20 h-20 md:w-28 md:h-28 rounded-full mix-blend-screen blur-lg opacity-55"
+                  className="s10e-mob-orb w-full h-full rounded-full mix-blend-screen blur-lg opacity-55"
                   style={{
                     background:
                       'radial-gradient(circle, rgba(192,132,252,0.85) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',
