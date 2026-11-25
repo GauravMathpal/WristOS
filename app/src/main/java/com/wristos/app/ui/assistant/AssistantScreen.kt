@@ -111,7 +111,13 @@ fun AssistantScreen(
     LaunchedEffect(pendingAiTrigger, isResumed) {
         if (pendingAiTrigger != 0L && isResumed) {
             viewMode = "orb"
-            viewModel.handleWatchTriggerIfPending()
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                viewModel.handleWatchTriggerIfPending()
+            } else if (viewModel.bleManager.consumePendingAiTrigger()) {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
         }
     }
 

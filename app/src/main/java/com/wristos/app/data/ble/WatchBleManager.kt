@@ -160,11 +160,14 @@ class WatchBleManager(private val context: Context) {
                 val serviceUuids = result.scanRecord?.serviceUuids?.map { it.uuid } ?: emptyList()
                 val hasServices = serviceUuids.contains(BleConstants.SERVICE_CTS) ||
                     serviceUuids.contains(BleConstants.SERVICE_HRS) ||
-                    serviceUuids.contains(BleConstants.SERVICE_BAS)
+                    serviceUuids.contains(BleConstants.SERVICE_BAS) ||
+                    serviceUuids.contains(BleConstants.SERVICE_DFU) ||
+                    serviceUuids.contains(BleConstants.SERVICE_MUSIC) ||
+                    serviceUuids.contains(BleConstants.SERVICE_MOTION)
 
                 if (hasMatch || hasServices) {
                     Log.d(TAG, "Discovered watch via LE scan: $name (${device.address})")
-                    prefs.setLastWatch(device.address, name.ifBlank { "WristOS Watch" })
+                    prefs.setLastWatch(device.address, name.ifBlank { "WristOS" })
                     stopScan()
                     connectToDevice(device)
                 }
@@ -208,17 +211,19 @@ class WatchBleManager(private val context: Context) {
                     _watchData.value = _watchData.value.copy(
                         connectionState = WatchConnectionState.CONNECTED,
                         deviceName = resolvedName,
-                        lastSyncTime = System.currentTimeMillis()
+                        lastSyncTime = System.currentTimeMillis(),
+                        statusMessage = null
                     )
                     gatt?.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
                     Log.w(TAG, "GATT disconnected (status=$status, newState=$newState)")
-                    if (status == 133 || status == 257 || newState != BluetoothProfile.STATE_CONNECTED) {
+                    if (status != BluetoothGatt.GATT_SUCCESS || newState != BluetoothProfile.STATE_CONNECTED) {
                         directConnectFailures++
                     }
                     cleanupGatt(alreadyDisconnected = (newState == BluetoothProfile.STATE_DISCONNECTED))
                     _watchData.value = _watchData.value.copy(
-                        connectionState = WatchConnectionState.DISCONNECTED
+                        connectionState = WatchConnectionState.DISCONNECTED,
+                        statusMessage = if (status == 133 || status == 5 || status == 19) "Re-scanning for watch..." else null
                     )
                     if (!isExplicitDisconnect) {
                         scheduleReconnect()
@@ -246,8 +251,8 @@ class WatchBleManager(private val context: Context) {
 
                     clearGattQueue()
                     musicNotifyRetries = 0
-                    enqueueGattOp { syncCurrentTime(gatt) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
+                    enqueueGattOp { syncCurrentTime(gatt) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MOTION, BleConstants.CHAR_STEPS) }
                     enqueueGattOp { readBattery(gatt) }
@@ -398,60 +403,60 @@ class WatchBleManager(private val context: Context) {
         }
     }
 
-    fun startScan(preserveReconnectCount: Boolean = false) {
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
+    fun startScan(preserveReconnectCount: Boolean = false, forceActiveScan: Boolean = false) {
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+            _watchData.value = _watchData.value.copy(
+                connectionState = WatchConnectionState.DISCONNECTED,
+                statusMessage = "Turn on Bluetooth to connect"
+            )
             return
         }
 
         if (!hasBluetoothConnectPermission() || !hasBluetoothScanPermission()) {
             Log.w(TAG, "Missing Bluetooth permissions; deferring scan")
+            _watchData.value = _watchData.value.copy(
+                connectionState = WatchConnectionState.DISCONNECTED,
+                statusMessage = "Allow Nearby Devices permission"
+            )
             return
         }
 
+        val scanner = bluetoothAdapter.bluetoothLeScanner
         if (scanner == null) {
-            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+            _watchData.value = _watchData.value.copy(
+                connectionState = WatchConnectionState.DISCONNECTED,
+                statusMessage = "BLE scanner unavailable"
+            )
             return
         }
 
         isExplicitDisconnect = false
         if (!preserveReconnectCount) {
             reconnectAttempts = 0
-            directConnectFailures = 0
+            if (!forceActiveScan) {
+                directConnectFailures = 0
+            }
         }
         reconnectJob?.cancel()
 
-        // 1. Try previously connected watch address first unless direct connect failed repeatedly
-        val savedAddr = prefs.getLastWatchAddress()
-        if (!savedAddr.isNullOrBlank() && directConnectFailures < 2) {
-            try {
-                val savedDevice = bluetoothAdapter.getRemoteDevice(savedAddr)
-                Log.d(TAG, "Connecting to saved watch: $savedAddr")
-                connectToDevice(savedDevice)
-                return
-            } catch (e: Exception) {
-                Log.w(TAG, "Invalid saved watch address: $savedAddr", e)
+        // When user explicitly taps Connect or direct connect failed previously, run active LE scan directly
+        if (!forceActiveScan && directConnectFailures == 0) {
+            val savedAddr = prefs.getLastWatchAddress()
+            if (!savedAddr.isNullOrBlank()) {
+                try {
+                    val savedDevice = bluetoothAdapter.getRemoteDevice(savedAddr)
+                    if (savedDevice.type != BluetoothDevice.DEVICE_TYPE_UNKNOWN) {
+                        Log.d(TAG, "Connecting to known watch: $savedAddr")
+                        connectToDevice(savedDevice)
+                        return
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Invalid saved watch address: $savedAddr", e)
+                }
             }
         }
 
-        // 2. Check OS bonded devices if direct connect hasn't already failed repeatedly
-        if (directConnectFailures < 2) {
-            val bonded = bluetoothAdapter.bondedDevices
-            val pairedWatch = bonded?.firstOrNull { d ->
-                val name = d.name ?: ""
-                name.contains("WristOS", ignoreCase = true) ||
-                    name.contains("PineTime", ignoreCase = true) ||
-                    name.contains("InfiniTime", ignoreCase = true)
-            }
-            if (pairedWatch != null) {
-                Log.d(TAG, "Found bonded watch: ${pairedWatch.name} (${pairedWatch.address})")
-                connectToDevice(pairedWatch)
-                return
-            }
-        }
-
-        // 3. Active LE scan (always picks up fresh advertising packets regardless of cached MAC/GATT state)
+        // Active LE scan discovers WristOS / PineTime regardless of cached MAC/random BLE address
         startActiveScan()
     }
 
@@ -461,9 +466,13 @@ class WatchBleManager(private val context: Context) {
 
         stopScan()
         isScanning = true
-        _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.SCANNING)
+        _watchData.value = _watchData.value.copy(
+            connectionState = WatchConnectionState.SCANNING,
+            statusMessage = "Scanning for WristOS watch..."
+        )
 
-        val scanMode = if (reconnectAttempts <= 2) {
+        val isForegroundBurst = reconnectAttempts <= 2
+        val scanMode = if (isForegroundBurst) {
             ScanSettings.SCAN_MODE_LOW_LATENCY
         } else {
             // Balanced mode prevents Android background scan throttling during long disconnections
@@ -474,15 +483,25 @@ class WatchBleManager(private val context: Context) {
             .setReportDelay(0)
             .build()
 
-        val filters = listOf(
-            ScanFilter.Builder().setDeviceName("WristOS").build(),
-            ScanFilter.Builder().setDeviceName("PineTime").build(),
-            ScanFilter.Builder().setServiceUuid(ParcelUuid(BleConstants.SERVICE_CTS)).build(),
-            ScanFilter.Builder().setServiceUuid(ParcelUuid(BleConstants.SERVICE_HRS)).build()
-        )
+        val filters = if (isForegroundBurst) {
+            // Unfiltered scan guarantees discovery across all Android OEMs regardless of scan-response timing or GAP name cache
+            null
+        } else {
+            listOf(
+                ScanFilter.Builder().setDeviceName("WristOS").build(),
+                ScanFilter.Builder().setDeviceName("PineTime").build(),
+                ScanFilter.Builder().setDeviceName("InfiniTime").build(),
+                ScanFilter.Builder().setServiceUuid(ParcelUuid(BleConstants.SERVICE_HRS)).build(),
+                ScanFilter.Builder().setServiceUuid(ParcelUuid(BleConstants.SERVICE_DFU)).build()
+            )
+        }
 
         try {
-            scanner.startScan(filters, settings, scanCallback)
+            if (filters != null) {
+                scanner.startScan(filters, settings, scanCallback)
+            } else {
+                scanner.startScan(null, settings, scanCallback)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Filtered scan start failed; falling back to open low-latency scan", e)
             try {
@@ -490,19 +509,25 @@ class WatchBleManager(private val context: Context) {
             } catch (ex: Exception) {
                 Log.e(TAG, "Open LE scan failed", ex)
                 isScanning = false
-                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+                _watchData.value = _watchData.value.copy(
+                    connectionState = WatchConnectionState.DISCONNECTED,
+                    statusMessage = "Enable Location & Bluetooth to scan"
+                )
                 return
             }
         }
 
-        // Scan window watchdog (15s) -> retry or backoff instead of burning battery forever
+        // Scan window watchdog (12s) -> retry or backoff instead of burning battery forever
         connectionWatchdogJob?.cancel()
         connectionWatchdogJob = scope.launch {
-            delay(15_000L)
+            delay(12_000L)
             if (isScanning && _watchData.value.connectionState == WatchConnectionState.SCANNING) {
                 Log.d(TAG, "LE scan window ended without finding watch; pausing before retry")
                 stopScan()
-                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
+                _watchData.value = _watchData.value.copy(
+                    connectionState = WatchConnectionState.DISCONNECTED,
+                    statusMessage = "Watch not found — bring near phone & tap Connect"
+                )
                 scheduleReconnect()
             }
         }
@@ -535,9 +560,9 @@ class WatchBleManager(private val context: Context) {
         bluetoothGatt = gatt
 
         connectionWatchdogJob = scope.launch {
-            delay(7000L)
+            delay(4500L)
             if (_watchData.value.connectionState == WatchConnectionState.CONNECTING) {
-                Log.d(TAG, "Direct connect timed out (>7s); falling back to LE scan")
+                Log.d(TAG, "Direct connect timed out (>4.5s); falling back to LE scan")
                 directConnectFailures++
                 cleanupGatt()
                 startActiveScan()
@@ -747,8 +772,13 @@ class WatchBleManager(private val context: Context) {
                 ).apply {
                     description = "Wakes the phone screen and opens WristOS AI when triggered from your watch"
                     setShowBadge(false)
-                    enableVibration(false)
-                    setSound(null, null)
+                    enableVibration(true)
+                    setSound(
+                        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                            .build()
+                    )
                     lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 }
                 manager.createNotificationChannel(channel)
@@ -835,19 +865,22 @@ class WatchBleManager(private val context: Context) {
                 notifManager?.notify(AI_WAKE_NOTIFICATION_ID, wakeNotification)
             }
 
-            // 4. Direct launch (succeeds immediately when app was recently active or SYSTEM_ALERT_WINDOW is granted)
+            // 4. Launch Activity (works from background when SYSTEM_ALERT_WINDOW is granted or FGS BAL exempt)
+            try {
+                appContext.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Direct startActivity fell back to PendingIntent/FullScreenIntent", e)
+            }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     val options = ActivityOptions.makeBasic()
                         .setPendingIntentBackgroundActivityStartMode(
                             ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
                         )
-                    appContext.startActivity(intent, options.toBundle())
-                } else {
-                    appContext.startActivity(intent)
+                    fullScreenPendingIntent.send(appContext, 0, intent, null, null, null, options.toBundle())
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Direct background startActivity fell back to FullScreenIntent notification", e)
+                Log.w(TAG, "PendingIntent background send blocked without overlay/full-screen perm", e)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Could not wake phone for AI trigger", e)
@@ -871,7 +904,7 @@ class WatchBleManager(private val context: Context) {
     companion object {
         private const val TAG = "WatchBleManager"
         const val ACTION_TRIGGER_AI = "com.wristos.app.TRIGGER_AI"
-        private const val AI_WAKE_CHANNEL_ID = "wristos_ai_wake_channel"
+        private const val AI_WAKE_CHANNEL_ID = "wristos_ai_wake_v2"
         private const val AI_WAKE_NOTIFICATION_ID = 1002
     }
 }

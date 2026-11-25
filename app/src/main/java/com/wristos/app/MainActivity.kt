@@ -60,6 +60,9 @@ class MainActivity : ComponentActivity() {
         val ble = BleManagerProvider.getInstance(this)
         ble.setAppForeground(true)
         ble.dismissWakeNotification()
+        if (hasBlePermissions()) {
+            ble.ensureScanningOrConnected()
+        }
     }
 
     override fun onPause() {

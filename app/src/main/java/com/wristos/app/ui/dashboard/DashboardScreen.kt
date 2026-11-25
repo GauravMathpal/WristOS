@@ -395,14 +395,16 @@ fun DashboardScreen(
                                     Text(
                                         text = when (watchData.connectionState) {
                                             WatchConnectionState.CONNECTED -> "Connected • ${watchData.batteryLevel}%"
-                                            WatchConnectionState.SCANNING -> "Scanning BLE..."
+                                            WatchConnectionState.SCANNING -> watchData.statusMessage ?: "Scanning BLE..."
                                             WatchConnectionState.CONNECTING -> "Linking Watch..."
-                                            WatchConnectionState.DISCONNECTED -> "Disconnected"
+                                            WatchConnectionState.DISCONNECTED -> watchData.statusMessage ?: "Disconnected"
                                         },
-                                        fontSize = 12.sp,
+                                        fontSize = 11.sp,
                                         fontFamily = FontFamily.Monospace,
                                         color = Color.White.copy(alpha = 0.90f),
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }

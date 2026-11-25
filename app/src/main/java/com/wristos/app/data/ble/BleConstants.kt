@@ -27,6 +27,9 @@ object BleConstants {
     val SERVICE_MUSIC: UUID = UUID.fromString("00000000-78fc-48fe-8e23-433b3a1942d0")
     val CHAR_MUSIC_EVENT: UUID = UUID.fromString("00000001-78fc-48fe-8e23-433b3a1942d0")
 
+    // Nordic Legacy DFU Service advertised in InfiniTime scan response
+    val SERVICE_DFU: UUID = UUID.fromString("00001530-1212-efde-1523-785feabcd123")
+
     // Client Characteristic Configuration Descriptor (for notifications)
     val CLIENT_CHARACTERISTIC_CONFIG: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 }
@@ -44,5 +47,6 @@ data class WatchData(
     val heartRate: Int = 0,
     val stepCount: Int = 0,
     val batteryLevel: Int = 0,
-    val lastSyncTime: Long = 0L
+    val lastSyncTime: Long = 0L,
+    val statusMessage: String? = null
 )

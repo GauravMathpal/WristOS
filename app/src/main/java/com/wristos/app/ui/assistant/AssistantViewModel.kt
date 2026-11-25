@@ -1,6 +1,8 @@
 package com.wristos.app.ui.assistant
 
 import android.app.Application
+import android.app.KeyguardManager
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wristos.app.core.voice.VoiceManager
@@ -65,6 +67,13 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
             voiceManager.playWakeChime()
             _remoteTriggerNotice.value = "Watch triggered AI (0xAA) • Listening..."
             viewModelScope.launch {
+                // If waking over keyguard, give OS unlock transition up to ~3.5s before starting mic
+                val km = getApplication<Application>().getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                var waitedMs = 0L
+                while (km?.isKeyguardLocked == true && waitedMs < 3500L) {
+                    delay(250L)
+                    waitedMs += 250L
+                }
                 // Allow window focus and audio HAL to settle when waking from lockscreen/background
                 delay(320L)
                 if (prefs.autoListenOnTrigger.value && !voiceManager.isListening.value) {

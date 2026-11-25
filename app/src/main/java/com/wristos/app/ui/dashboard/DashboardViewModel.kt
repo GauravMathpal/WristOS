@@ -112,7 +112,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun connectWatch() = bleManager.startScan()
+    fun connectWatch() = bleManager.startScan(forceActiveScan = true)
     fun disconnectWatch() = bleManager.disconnect()
     fun syncTelemetry() = bleManager.forceSyncTelemetry()
     fun sendTestAlert(message: String = "WristOS Alert: Focus session starting!") =
