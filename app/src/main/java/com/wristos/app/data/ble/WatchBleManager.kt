@@ -439,6 +439,15 @@ class WatchBleManager(private val context: Context) {
         }
         reconnectJob?.cancel()
 
+        // First check if Android OS already maintains an active GATT/ACL connection (e.g. after app swipe-close & reopen)
+        val osConnectedWatch = findAlreadyConnectedWatch()
+        if (osConnectedWatch != null) {
+            Log.d(TAG, "Found OS-connected watch via BluetoothManager: ${osConnectedWatch.name} (${osConnectedWatch.address})")
+            prefs.setLastWatch(osConnectedWatch.address, osConnectedWatch.name?.takeIf { it.isNotBlank() } ?: "WristOS")
+            connectToDevice(osConnectedWatch)
+            return
+        }
+
         // When user explicitly taps Connect or direct connect failed previously, run active LE scan directly
         if (!forceActiveScan && directConnectFailures == 0) {
             val savedAddr = prefs.getLastWatchAddress()
@@ -458,6 +467,24 @@ class WatchBleManager(private val context: Context) {
 
         // Active LE scan discovers WristOS / PineTime regardless of cached MAC/random BLE address
         startActiveScan()
+    }
+
+    private fun findAlreadyConnectedWatch(): BluetoothDevice? {
+        if (!hasBluetoothConnectPermission()) return null
+        val savedAddr = prefs.getLastWatchAddress()
+        val connected = try {
+            bluetoothManager?.getConnectedDevices(BluetoothProfile.GATT) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return connected.firstOrNull { d ->
+            val name = try { d.name ?: "" } catch (_: Exception) { "" }
+            val matchesName = name.contains("WristOS", ignoreCase = true) ||
+                name.contains("PineTime", ignoreCase = true) ||
+                name.contains("InfiniTime", ignoreCase = true)
+            val matchesSaved = !savedAddr.isNullOrBlank() && d.address.equals(savedAddr, ignoreCase = true)
+            matchesName || matchesSaved
+        }
     }
 
     fun startActiveScan() {

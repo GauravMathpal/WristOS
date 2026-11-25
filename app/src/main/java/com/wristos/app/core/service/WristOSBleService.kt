@@ -89,6 +89,14 @@ class WristOSBleService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Keep the foreground service scanning/connected cleanly if user closes UI task
+        if (hasRequiredBlePermissions()) {
+            bleManager?.ensureScanningOrConnected()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {

@@ -46,6 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wristos.app.data.ble.WatchConnectionState
 import com.wristos.app.navigation.Screen
@@ -89,6 +92,19 @@ fun DashboardScreen(
         watchData.connectionState == WatchConnectionState.CONNECTING
 
     var currentTimeMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var resumeTick by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumeTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             currentTimeMs = System.currentTimeMillis()
@@ -122,9 +138,9 @@ fun DashboardScreen(
     var modalSub by remember { mutableStateOf("") }
     var modalTag by remember { mutableStateOf("Personal") }
 
-    val canDrawOverlays = remember(currentTimeMs) { viewModel.bleManager.canDrawOverlaysCompat() }
-    val canFullScreen = remember(currentTimeMs) { viewModel.bleManager.canUseFullScreenIntentCompat() }
-    val hasMic = remember(currentTimeMs) {
+    val canDrawOverlays = remember(currentTimeMs, resumeTick) { viewModel.bleManager.canDrawOverlaysCompat() }
+    val canFullScreen = remember(currentTimeMs, resumeTick) { viewModel.bleManager.canUseFullScreenIntentCompat() }
+    val hasMic = remember(currentTimeMs, resumeTick) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
     val needsWakeSetup = !canDrawOverlays || !canFullScreen || !hasMic

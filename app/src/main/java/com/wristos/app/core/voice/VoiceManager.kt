@@ -33,12 +33,20 @@ class VoiceManager(context: Context) {
 
     // Speech to Text
     private var speechRecognizer: SpeechRecognizer? = null
+    private var isUsingOnDeviceRecognizer = false
     private var silenceRunnable: Runnable? = null
+    private var startDelayRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
     private var hasDeliveredResult = false
     private var retryCount = 0
+    private var preferOfflineNextAttempt = false
+    private var fallbackLauncherCallback: (() -> Unit)? = null
+
+    fun setSystemSpeechFallback(callback: (() -> Unit)?) {
+        fallbackLauncherCallback = callback
+    }
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -144,162 +152,233 @@ class VoiceManager(context: Context) {
 
     fun startListening(onResult: (String) -> Unit) {
         retryCount = 0
+        preferOfflineNextAttempt = false
+        isUsingOnDeviceRecognizer = false
         startListeningInternal(onResult)
     }
 
     private fun startListeningInternal(onResult: (String) -> Unit) {
-        mainHandler.post {
-            try {
-                if (ContextCompat.checkSelfPermission(
-                        appContext,
-                        android.Manifest.permission.RECORD_AUDIO
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    _errorMessage.value = "Microphone permission required. Please allow audio access."
+        startDelayRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable { beginRecognizerSession(onResult) }
+        startDelayRunnable = r
+        mainHandler.post(r)
+    }
+
+    private fun createBestSpeechRecognizer(): SpeechRecognizer {
+        if (preferOfflineNextAttempt &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)
+        ) {
+            isUsingOnDeviceRecognizer = true
+            return SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext)
+        }
+        isUsingOnDeviceRecognizer = false
+        return SpeechRecognizer.createSpeechRecognizer(appContext)
+    }
+
+    private fun beginRecognizerSession(onResult: (String) -> Unit) {
+        try {
+            if (ContextCompat.checkSelfPermission(
+                    appContext,
+                    android.Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                _errorMessage.value = "Microphone permission required. Please allow audio access."
+                _isListening.value = false
+                return
+            }
+
+            val hasStandard = SpeechRecognizer.isRecognitionAvailable(appContext)
+            val hasOnDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)
+
+            if (!hasStandard && !hasOnDevice) {
+                Log.w("VoiceManager", "Speech recognition service not available on device")
+                _errorMessage.value = "Speech recognition service unavailable — tap System Mic or type."
+                _isListening.value = false
+                return
+            }
+
+            // If we need to recreate the recognizer cleanly, destroy first and wait 160ms so Google's ServiceConnection unbinds cleanly
+            if (speechRecognizer != null) {
+                try {
+                    speechRecognizer?.cancel()
+                    speechRecognizer?.destroy()
+                } catch (_: Exception) {
+                }
+                speechRecognizer = null
+                val delayed = Runnable { launchRecognizerNow(onResult) }
+                startDelayRunnable = delayed
+                mainHandler.postDelayed(delayed, 160L)
+                return
+            }
+
+            launchRecognizerNow(onResult)
+        } catch (e: Exception) {
+            cancelSilenceTimer()
+            Log.e("VoiceManager", "Failed to prepare speech recognition", e)
+            _errorMessage.value = "Voice input error: ${e.localizedMessage ?: "Unknown"}"
+            _isListening.value = false
+        }
+    }
+
+    private fun launchRecognizerNow(onResult: (String) -> Unit) {
+        try {
+            _errorMessage.value = null
+            _speechText.value = ""
+            _rmsDb.value = 0f
+            hasDeliveredResult = false
+            stopSpeaking()
+            cancelSilenceTimer()
+            requestVoiceAudioFocus()
+
+            val recognizer = createBestSpeechRecognizer()
+            speechRecognizer = recognizer
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                if (preferOfflineNextAttempt) {
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                }
+            }
+
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    _isListening.value = true
+                    _errorMessage.value = null
+                    // Initial silence timeout: 6 seconds before closing mic
+                    resetSilenceTimer(6000L) {
+                        Log.d("VoiceManager", "Auto-stopping voice input due to initial silence")
+                        stopListening()
+                    }
+                }
+
+                override fun onBeginningOfSpeech() {
+                    cancelSilenceTimer()
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {
+                    _rmsDb.value = rmsdB.coerceIn(0f, 12f)
+                }
+
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    cancelSilenceTimer()
+                    abandonVoiceAudioFocus()
                     _isListening.value = false
-                    return@post
+                    _rmsDb.value = 0f
                 }
 
-                if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
-                    Log.w("VoiceManager", "Speech recognition service not available on device")
-                    _errorMessage.value = "Speech recognition is not available on this device."
-                    _isListening.value = false
-                    return@post
-                }
+                override fun onError(error: Int) {
+                    cancelSilenceTimer()
+                    abandonVoiceAudioFocus()
+                    _rmsDb.value = 0f
+                    Log.w("VoiceManager", "SpeechRecognizer error: $error (retry=$retryCount, onDevice=$isUsingOnDeviceRecognizer)")
 
-                _errorMessage.value = null
-                _speechText.value = ""
-                _rmsDb.value = 0f
-                hasDeliveredResult = false
-                stopSpeaking()
-                cancelSilenceTimer()
-                requestVoiceAudioFocus()
-                speechRecognizer?.destroy()
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
+                    // Error 11 = ERROR_SERVER_DISCONNECTED; also retry audio/client/busy/network transient wake errors
+                    val isServerOrTransient = error == 11 /* ERROR_SERVER_DISCONNECTED */ ||
+                        error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                        error == SpeechRecognizer.ERROR_AUDIO ||
+                        error == SpeechRecognizer.ERROR_CLIENT ||
+                        error == SpeechRecognizer.ERROR_NETWORK
 
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                }
+                    if (isServerOrTransient && retryCount < 2) {
+                        retryCount++
+                        if (error == 11 || error == SpeechRecognizer.ERROR_NETWORK) {
+                            preferOfflineNextAttempt = true
+                        }
+                        _isListening.value = false
+                        val delayed = Runnable { launchRecognizerNow(onResult) }
+                        startDelayRunnable = delayed
+                        mainHandler.postDelayed(delayed, 280L)
+                        return
+                    }
 
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        _isListening.value = true
+                    // If server still disconnected after retries (error 11), fall back to system RecognizerIntent UI if registered
+                    if (error == 11 && fallbackLauncherCallback != null) {
+                        _isListening.value = false
                         _errorMessage.value = null
-                        // Initial silence timeout: 6 seconds before closing mic
-                        resetSilenceTimer(6000L) {
-                            Log.d("VoiceManager", "Auto-stopping voice input due to initial silence")
-                            stopListening()
-                        }
+                        fallbackLauncherCallback?.invoke()
+                        return
                     }
 
-                    override fun onBeginningOfSpeech() {
-                        cancelSilenceTimer()
-                    }
-
-                    override fun onRmsChanged(rmsdB: Float) {
-                        _rmsDb.value = rmsdB.coerceIn(0f, 12f)
-                    }
-
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-
-                    override fun onEndOfSpeech() {
-                        cancelSilenceTimer()
-                        abandonVoiceAudioFocus()
+                    // If partial text was already captured before NO_MATCH/TIMEOUT, deliver it once
+                    if (!hasDeliveredResult && _speechText.value.isNotBlank() &&
+                        (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                    ) {
+                        hasDeliveredResult = true
                         _isListening.value = false
-                        _rmsDb.value = 0f
+                        onResult(_speechText.value.trim())
+                        return
                     }
 
-                    override fun onError(error: Int) {
-                        cancelSilenceTimer()
-                        abandonVoiceAudioFocus()
-                        _rmsDb.value = 0f
-                        Log.w("VoiceManager", "SpeechRecognizer error: $error")
-
-                        // When waking from locked/sleep state, audio HAL or recognizer may need a brief settle retry
-                        val isWakeRetryable = error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-                            error == SpeechRecognizer.ERROR_AUDIO ||
-                            error == SpeechRecognizer.ERROR_CLIENT
-                        if (isWakeRetryable && retryCount < 2) {
-                            retryCount++
-                            _isListening.value = false
-                            mainHandler.postDelayed({ startListeningInternal(onResult) }, 450L)
-                            return
-                        }
-
-                        // If partial text was already captured before NO_MATCH/TIMEOUT, deliver it once
-                        if (!hasDeliveredResult && _speechText.value.isNotBlank() &&
-                            (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
-                        ) {
-                            hasDeliveredResult = true
-                            _isListening.value = false
-                            onResult(_speechText.value.trim())
-                            return
-                        }
-
-                        val errorDesc = when (error) {
-                            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
-                            SpeechRecognizer.ERROR_CLIENT -> "Speech recognizer reset — tap mic to retry"
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission not granted"
-                            SpeechRecognizer.ERROR_NETWORK -> "Network connection error for speech"
-                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-                            SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized. Tap the Orb to retry."
-                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy. Tap the Orb to retry."
-                            SpeechRecognizer.ERROR_SERVER -> "Speech server error"
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap the Orb to speak."
-                            else -> "Speech recognition error ($error)"
-                        }
-                        _errorMessage.value = errorDesc
-                        _isListening.value = false
+                    val errorDesc = when (error) {
+                        SpeechRecognizer.ERROR_AUDIO -> "Microphone busy — tap Speak or Retry"
+                        SpeechRecognizer.ERROR_CLIENT -> "Speech service reset — tap Speak to retry"
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission not granted"
+                        SpeechRecognizer.ERROR_NETWORK -> "Network speech unavailable — tap Retry"
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech network timeout"
+                        SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that. Tap the Orb to try again."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognizer busy — tap to retry"
+                        SpeechRecognizer.ERROR_SERVER -> "Google Speech server error"
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap the Orb to speak."
+                        11 -> "Voice service disconnected — tap Retry for system mic"
+                        else -> "Voice input interrupted (code $error) — tap Retry"
                     }
+                    _errorMessage.value = errorDesc
+                    _isListening.value = false
+                }
 
-                    override fun onResults(results: Bundle?) {
-                        cancelSilenceTimer()
-                        _isListening.value = false
-                        _rmsDb.value = 0f
-                        if (hasDeliveredResult) return
+                override fun onResults(results: Bundle?) {
+                    cancelSilenceTimer()
+                    abandonVoiceAudioFocus()
+                    _isListening.value = false
+                    _rmsDb.value = 0f
+                    if (hasDeliveredResult) return
 
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        val recognized = matches?.firstOrNull()?.trim().orEmpty()
-                            .ifBlank { _speechText.value.trim() }
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val recognized = matches?.firstOrNull()?.trim().orEmpty()
+                        .ifBlank { _speechText.value.trim() }
 
-                        if (recognized.isNotBlank()) {
-                            hasDeliveredResult = true
-                            _speechText.value = recognized
-                            onResult(recognized)
-                        }
+                    if (recognized.isNotBlank()) {
+                        hasDeliveredResult = true
+                        _speechText.value = recognized
+                        onResult(recognized)
                     }
+                }
 
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            val text = matches[0]
-                            _speechText.value = text
-                            resetSilenceTimer(1700L) {
-                                if (!hasDeliveredResult && _speechText.value.isNotBlank()) {
-                                    hasDeliveredResult = true
-                                    val committed = _speechText.value.trim()
-                                    stopListening()
-                                    onResult(committed)
-                                } else {
-                                    stopListening()
-                                }
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        val text = matches[0]
+                        _speechText.value = text
+                        resetSilenceTimer(1700L) {
+                            if (!hasDeliveredResult && _speechText.value.isNotBlank()) {
+                                hasDeliveredResult = true
+                                val committed = _speechText.value.trim()
+                                stopListening()
+                                onResult(committed)
+                            } else {
+                                stopListening()
                             }
                         }
                     }
+                }
 
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
 
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) {
-                cancelSilenceTimer()
-                Log.e("VoiceManager", "Failed to start speech recognition", e)
-                _errorMessage.value = "Voice input error: ${e.localizedMessage ?: "Unknown"}"
-                _isListening.value = false
-            }
+            recognizer.startListening(intent)
+        } catch (e: Exception) {
+            cancelSilenceTimer()
+            abandonVoiceAudioFocus()
+            Log.e("VoiceManager", "Failed to start speech recognition", e)
+            _errorMessage.value = "Voice input error: ${e.localizedMessage ?: "Unknown"}"
+            _isListening.value = false
         }
     }
 
@@ -322,11 +401,14 @@ class VoiceManager(context: Context) {
     }
 
     fun destroy() {
+        startDelayRunnable?.let { mainHandler.removeCallbacks(it) }
         cancelSilenceTimer()
+        abandonVoiceAudioFocus()
         try {
             speechRecognizer?.destroy()
         } catch (_: Exception) {
         }
+        speechRecognizer = null
         textToSpeech?.stop()
         textToSpeech?.shutdown()
     }

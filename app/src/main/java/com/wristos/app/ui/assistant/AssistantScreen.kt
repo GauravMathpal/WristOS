@@ -1,7 +1,10 @@
 package com.wristos.app.ui.assistant
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -20,10 +23,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -82,6 +90,38 @@ fun AssistantScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.startVoiceInput()
+        }
+    }
+
+    val systemSpeechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+            if (!spoken.isNullOrBlank()) {
+                viewModel.voiceManager.clearError()
+                viewModel.sendMessage(spoken)
+                viewMode = "chat"
+            }
+        }
+    }
+
+    DisposableEffect(viewModel) {
+        viewModel.voiceManager.setSystemSpeechFallback {
+            val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "WristOS AI • Speak now...")
+            }
+            try {
+                systemSpeechLauncher.launch(speechIntent)
+            } catch (_: Exception) {
+            }
+        }
+        onDispose {
+            viewModel.voiceManager.setSystemSpeechFallback(null)
         }
     }
 
@@ -195,7 +235,7 @@ fun AssistantScreen(
                                 )
                         ) {
                             Icon(
-                                imageVector = if (ttsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                imageVector = if (ttsEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                 contentDescription = "Toggle Voice",
                                 tint = if (ttsEnabled) palette.secondary else TextTertiary,
                                 modifier = Modifier.size(16.dp)
@@ -313,7 +353,7 @@ fun AssistantScreen(
                         .padding(18.dp)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Spacer(modifier = Modifier.height(2.dp))
 
@@ -531,6 +571,16 @@ fun AssistantScreen(
                     value = inputText,
                     onValueChange = { inputText = it },
                     placeholder = { Text("Ask AI, add task, remember fact...", color = TextTertiary, fontSize = 13.sp) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (inputText.isNotBlank() && !isLoading) {
+                                viewModel.sendMessage(inputText)
+                                inputText = ""
+                                viewMode = "chat"
+                            }
+                        }
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,

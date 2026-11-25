@@ -35,9 +35,15 @@ import com.wristos.app.data.ble.BleManagerProvider
 import com.wristos.app.data.local.WristOSDatabase
 import com.wristos.app.data.local.wellness.FocusSessionEntity
 import com.wristos.app.ui.theme.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -48,12 +54,93 @@ enum class FocusMode(val label: String, val minutes: Int) {
     DEEP_WORK("Deep Work", 45)
 }
 
+data class FocusTimerUiState(
+    val mode: FocusMode = FocusMode.POMODORO,
+    val totalSeconds: Int = FocusMode.POMODORO.minutes * 60,
+    val secondsLeft: Int = FocusMode.POMODORO.minutes * 60,
+    val isRunning: Boolean = false,
+    val selectedTag: String = "#DeepWork"
+)
+
+private object PersistentFocusTimer {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var tickJob: Job? = null
+
+    private val _state = MutableStateFlow(FocusTimerUiState())
+    val state: StateFlow<FocusTimerUiState> = _state.asStateFlow()
+
+    fun selectMode(mode: FocusMode) {
+        tickJob?.cancel()
+        val secs = mode.minutes * 60
+        _state.value = _state.value.copy(
+            mode = mode,
+            totalSeconds = secs,
+            secondsLeft = secs,
+            isRunning = false
+        )
+    }
+
+    fun selectTag(tag: String) {
+        _state.value = _state.value.copy(selectedTag = tag)
+    }
+
+    fun reset() {
+        tickJob?.cancel()
+        val cur = _state.value
+        _state.value = cur.copy(secondsLeft = cur.totalSeconds, isRunning = false)
+    }
+
+    fun toggleRunning(onComplete: (FocusMode, String) -> Unit) {
+        val cur = _state.value
+        if (cur.isRunning) {
+            tickJob?.cancel()
+            _state.value = cur.copy(isRunning = false)
+            return
+        }
+        _state.value = cur.copy(isRunning = true)
+        tickJob?.cancel()
+        tickJob = scope.launch {
+            while (_state.value.isRunning && _state.value.secondsLeft > 0) {
+                delay(1000L)
+                val now = _state.value
+                if (!now.isRunning) break
+                val next = (now.secondsLeft - 1).coerceAtLeast(0)
+                if (next == 0) {
+                    _state.value = now.copy(secondsLeft = now.totalSeconds, isRunning = false)
+                    onComplete(now.mode, now.selectedTag)
+                    break
+                } else {
+                    _state.value = now.copy(secondsLeft = next)
+                }
+            }
+        }
+    }
+}
+
 class FocusViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = WristOSDatabase.getDatabase(application).focusSessionDao()
     private val ble = BleManagerProvider.getInstance(application)
 
+    val timerState: StateFlow<FocusTimerUiState> = PersistentFocusTimer.state
     val sessions: StateFlow<List<FocusSessionEntity>> = dao.getAllSessions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun selectMode(mode: FocusMode) = PersistentFocusTimer.selectMode(mode)
+    fun selectTag(tag: String) = PersistentFocusTimer.selectTag(tag)
+    fun resetTimer() = PersistentFocusTimer.reset()
+
+    fun toggleTimer(onCompletedToast: (String) -> Unit) {
+        val wasRunning = timerState.value.isRunning
+        val mode = timerState.value.mode
+        PersistentFocusTimer.toggleRunning { completedMode, tag ->
+            logSession(completedMode, tag)
+            onCompletedToast("${completedMode.label} completed!")
+        }
+        if (!wasRunning) {
+            sendStartAlert(mode)
+            onCompletedToast("Focus alert pushed to watch")
+        }
+    }
 
     fun logSession(mode: FocusMode, tag: String) {
         viewModelScope.launch {
@@ -75,31 +162,20 @@ fun FocusScreen(
     viewModel: FocusViewModel = viewModel()
 ) {
     val sessions by viewModel.sessions.collectAsState()
+    val timerState by viewModel.timerState.collectAsState()
     val palette = LocalWristOSPalette.current
 
-    var selectedMode by remember { mutableStateOf(FocusMode.POMODORO) }
-    var totalSeconds by remember { mutableIntStateOf(FocusMode.POMODORO.minutes * 60) }
-    var secondsLeft by remember { mutableIntStateOf(FocusMode.POMODORO.minutes * 60) }
-    var isRunning by remember { mutableStateOf(false) }
-    var selectedTag by remember { mutableStateOf("#DeepWork") }
+    val selectedMode = timerState.mode
+    val totalSeconds = timerState.totalSeconds
+    val secondsLeft = timerState.secondsLeft
+    val isRunning = timerState.isRunning
+    val selectedTag = timerState.selectedTag
     var toastMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(toastMsg) {
         if (toastMsg != null) {
             delay(2500L)
             toastMsg = null
-        }
-    }
-
-    LaunchedEffect(isRunning, selectedMode) {
-        while (isRunning && secondsLeft > 0) {
-            delay(1000L)
-            secondsLeft--
-            if (secondsLeft == 0) {
-                isRunning = false
-                viewModel.logSession(selectedMode, selectedTag)
-                toastMsg = "${selectedMode.label} completed!"
-            }
         }
     }
 
@@ -153,10 +229,7 @@ fun FocusScreen(
                         color = if (active) palette.primary.copy(alpha = 0.22f) else palette.surface,
                         border = BorderStroke(1.dp, if (active) palette.primary else palette.border),
                         modifier = Modifier.clickable {
-                            selectedMode = mode
-                            totalSeconds = mode.minutes * 60
-                            secondsLeft = mode.minutes * 60
-                            isRunning = false
+                            viewModel.selectMode(mode)
                         }
                     ) {
                         Text(
@@ -219,7 +292,7 @@ fun FocusScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 color = if (active) palette.secondary.copy(alpha = 0.2f) else palette.surfaceElevated,
                                 border = BorderStroke(1.dp, if (active) palette.secondary else palette.border),
-                                modifier = Modifier.clickable { selectedTag = tag }
+                                modifier = Modifier.clickable { viewModel.selectTag(tag) }
                             ) {
                                 Text(
                                     text = tag,
@@ -237,10 +310,7 @@ fun FocusScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = {
-                                isRunning = false
-                                secondsLeft = totalSeconds
-                            },
+                            onClick = { viewModel.resetTimer() },
                             modifier = Modifier
                                 .size(48.dp)
                                 .background(palette.surfaceElevated, CircleShape)
@@ -252,12 +322,7 @@ fun FocusScreen(
                         AuroraGradientButton(
                             text = if (isRunning) "Pause" else "Start Focus",
                             onClick = {
-                                val next = !isRunning
-                                isRunning = next
-                                if (next) {
-                                    viewModel.sendStartAlert(selectedMode)
-                                    toastMsg = "Focus alert pushed to watch"
-                                }
+                                viewModel.toggleTimer { msg -> toastMsg = msg }
                             },
                             leadingIcon = {
                                 Icon(
@@ -271,9 +336,8 @@ fun FocusScreen(
 
                         IconButton(
                             onClick = {
-                                isRunning = false
+                                viewModel.resetTimer()
                                 viewModel.logSession(selectedMode, selectedTag)
-                                secondsLeft = totalSeconds
                                 toastMsg = "Logged ${selectedMode.minutes}m session"
                             },
                             modifier = Modifier

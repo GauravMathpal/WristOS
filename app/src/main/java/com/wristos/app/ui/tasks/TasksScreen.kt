@@ -10,10 +10,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +63,7 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showDialog = true },
@@ -102,6 +106,18 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
                             onValueChange = { quickInput = it },
                             placeholder = { Text("e.g. Finish lab report by tmr 5pm #urgent", color = TextTertiary, fontSize = 12.sp) },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (quickInput.isNotBlank()) {
+                                        val summary = viewModel.addNaturalLanguageTask(quickInput)
+                                        if (summary != null) {
+                                            toastMsg = "Added $summary"
+                                            quickInput = ""
+                                        }
+                                    }
+                                }
+                            ),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,

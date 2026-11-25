@@ -11,10 +11,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +67,7 @@ fun MemoryScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -126,6 +130,14 @@ fun MemoryScreen(
                                 onValueChange = { aiQuestion = it },
                                 placeholder = { Text("Ask e.g. cardio BPM, watch specs...", color = TextTertiary, fontSize = 12.sp) },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(
+                                    onSearch = {
+                                        if (aiQuestion.isNotBlank()) {
+                                            aiAnswer = viewModel.queryVaultAnswer(aiQuestion, memories)
+                                        }
+                                    }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedContainerColor = palette.bgPrimary.copy(alpha = 0.7f),
                                     unfocusedContainerColor = palette.bgPrimary.copy(alpha = 0.7f),

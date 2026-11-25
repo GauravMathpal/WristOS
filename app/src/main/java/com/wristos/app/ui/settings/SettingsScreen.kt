@@ -32,8 +32,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.wristos.app.BuildConfig
 import com.wristos.app.data.ble.BleManagerProvider
+import com.wristos.app.data.ble.WatchConnectionState
 import com.wristos.app.data.local.AppThemePreset
 import com.wristos.app.data.local.SettingsPreferences
 import com.wristos.app.navigation.Screen
@@ -44,8 +48,10 @@ fun SettingsScreen(
     onNavigate: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { SettingsPreferences.getInstance(context) }
     val bleManager = remember { BleManagerProvider.getInstance(context) }
+    val watchData by bleManager.watchData.collectAsState()
     val palette = LocalWristOSPalette.current
 
     val autoSync by prefs.autoSync.collectAsState()
@@ -63,17 +69,34 @@ fun SettingsScreen(
     var goalInput by remember(savedGoal) { mutableStateOf(savedGoal.toString()) }
     var keyInput by remember(customKey) { mutableStateOf(customKey) }
     var statusNotice by remember { mutableStateOf<String?>(null) }
+    var resumeTick by remember { mutableIntStateOf(0) }
 
-    val canOverlay = bleManager.canDrawOverlaysCompat()
-    val canFullScreen = bleManager.canUseFullScreenIntentCompat()
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumeTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val canOverlay = remember(resumeTick) { bleManager.canDrawOverlaysCompat() }
+    val canFullScreen = remember(resumeTick) { bleManager.canUseFullScreenIntentCompat() }
     val powerMgr = context.getSystemService(PowerManager::class.java)
-    val ignoringBattery = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-        (powerMgr?.isIgnoringBatteryOptimizations(context.packageName) == true)
-    val hasNotifPerm = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-        PackageManager.PERMISSION_GRANTED
-    val hasMicPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-        PackageManager.PERMISSION_GRANTED
+    val ignoringBattery = remember(resumeTick) {
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            (powerMgr?.isIgnoringBatteryOptimizations(context.packageName) == true)
+    }
+    val hasNotifPerm = remember(resumeTick) {
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+    val hasMicPerm = remember(resumeTick) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+    }
     val isGeminiReady = customKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
 
     Column(
@@ -173,6 +196,64 @@ fun SettingsScreen(
 
         when (activeTab) {
             "preferences" -> {
+                AuroraGlassCard(
+                    cornerRadius = 20.dp,
+                    highlightBorder = watchData.connectionState == WatchConnectionState.CONNECTED
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "WATCH BLE BRIDGE",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = palette.primary,
+                                letterSpacing = 1.2.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = when (watchData.connectionState) {
+                                    WatchConnectionState.CONNECTED -> "${watchData.deviceName} • ${watchData.batteryLevel}%"
+                                    WatchConnectionState.SCANNING -> watchData.statusMessage ?: "Scanning for WristOS..."
+                                    WatchConnectionState.CONNECTING -> "Linking to watch..."
+                                    WatchConnectionState.DISCONNECTED -> watchData.statusMessage ?: "Watch disconnected"
+                                },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (watchData.connectionState == WatchConnectionState.CONNECTED) {
+                                EmeraldSuccess.copy(alpha = 0.16f)
+                            } else {
+                                palette.primary.copy(alpha = 0.18f)
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (watchData.connectionState == WatchConnectionState.CONNECTED) EmeraldSuccess else palette.primary
+                            ),
+                            modifier = Modifier.clickable {
+                                bleManager.startScan(forceActiveScan = true)
+                                statusNotice = "Scanning for WristOS watch..."
+                            }
+                        ) {
+                            Text(
+                                text = if (watchData.connectionState == WatchConnectionState.CONNECTED) "Resync" else "Reconnect",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (watchData.connectionState == WatchConnectionState.CONNECTED) EmeraldSuccess else palette.primaryVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+
                 AuroraGlassCard(cornerRadius = 20.dp) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("HARDWARE & TELEMETRY", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primary, letterSpacing = 1.2.sp)
@@ -404,7 +485,7 @@ fun SettingsScreen(
                 MetaInfoRow("Ecosystem Version", "WristOS v1.16.0-PROD")
                 MetaInfoRow("Hardware Target", "PineTime (Nordic nRF52832)")
                 MetaInfoRow("BLE Bridge", "Foreground ConnectedDevice Service")
-                MetaInfoRow("Storage Layer", "Room 2.7 (SQLite v3)")
+                MetaInfoRow("Storage Layer", "Room 2.7 (SQLite v4)")
             }
         }
 
