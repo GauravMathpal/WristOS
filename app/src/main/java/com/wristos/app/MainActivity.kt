@@ -40,7 +40,10 @@ class MainActivity : ComponentActivity() {
         startBleServiceIfPermitted()
 
         if (intent?.action == WatchBleManager.ACTION_TRIGGER_AI) {
-            BleManagerProvider.getInstance(this).triggerAiManually()
+            val ble = BleManagerProvider.getInstance(this)
+            if (ble.pendingAiTrigger.value == 0L) {
+                ble.triggerAiManually()
+            }
         }
 
         val prefs = SettingsPreferences.getInstance(this)
@@ -54,7 +57,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        BleManagerProvider.getInstance(this).dismissWakeNotification()
+        val ble = BleManagerProvider.getInstance(this)
+        ble.setAppForeground(true)
+        ble.dismissWakeNotification()
+    }
+
+    override fun onPause() {
+        BleManagerProvider.getInstance(this).setAppForeground(false)
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -62,7 +72,10 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         if (intent.action == WatchBleManager.ACTION_TRIGGER_AI) {
             configureLockScreenWake(true)
-            BleManagerProvider.getInstance(this).triggerAiManually()
+            val ble = BleManagerProvider.getInstance(this)
+            if (ble.pendingAiTrigger.value == 0L) {
+                ble.triggerAiManually()
+            }
         }
     }
 

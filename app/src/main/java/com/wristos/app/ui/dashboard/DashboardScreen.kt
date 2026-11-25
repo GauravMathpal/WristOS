@@ -1,6 +1,8 @@
 package com.wristos.app.ui.dashboard
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -26,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -35,11 +38,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wristos.app.data.ble.WatchConnectionState
 import com.wristos.app.navigation.Screen
@@ -47,6 +53,7 @@ import com.wristos.app.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 private fun getGreetingForHour(hourOfDay: Int): String = when (hourOfDay) {
@@ -64,7 +71,13 @@ fun DashboardScreen(
     val watchData by viewModel.watchData.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
     val pendingTasksCount by viewModel.pendingTasksCount.collectAsState()
+    val completedTasksCount by viewModel.completedTasksCount.collectAsState()
     val memoriesCount by viewModel.memoriesCount.collectAsState()
+    val habits by viewModel.habits.collectAsState()
+    val hydration by viewModel.todayHydration.collectAsState()
+    val focusSessions by viewModel.focusSessions.collectAsState()
+    val briefing by viewModel.briefing.collectAsState()
+    val isBriefingLoading by viewModel.isBriefingLoading.collectAsState()
     val userName by viewModel.prefs.userName.collectAsState()
     val dailyGoal by viewModel.prefs.dailyStepGoal.collectAsState()
     val palette = LocalWristOSPalette.current
@@ -93,6 +106,7 @@ fun DashboardScreen(
     val shortDateStr = remember(currentTimeMs) {
         SimpleDateFormat("EEE d", Locale.getDefault()).format(cal.time)
     }
+    val todayKey = remember(currentTimeMs) { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(currentTimeMs)) }
 
     var toastMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toastMessage) {
@@ -107,9 +121,12 @@ fun DashboardScreen(
     var modalSub by remember { mutableStateOf("") }
     var modalTag by remember { mutableStateOf("Personal") }
 
-    val canDrawOverlays = remember(currentTimeMs) {
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+    val canDrawOverlays = remember(currentTimeMs) { viewModel.bleManager.canDrawOverlaysCompat() }
+    val canFullScreen = remember(currentTimeMs) { viewModel.bleManager.canUseFullScreenIntentCompat() }
+    val hasMic = remember(currentTimeMs) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
+    val needsWakeSetup = !canDrawOverlays || !canFullScreen || !hasMic
 
     val statusDotColor by animateColorAsState(
         targetValue = when (watchData.connectionState) {
@@ -121,32 +138,43 @@ fun DashboardScreen(
     )
 
     val pendingList = remember(tasks) { tasks.filter { !it.isCompleted }.take(3) }
+    val completionPct = if (tasks.isNotEmpty()) ((completedTasksCount.toFloat() / tasks.size) * 100).toInt() else 0
+
+    val steps = if (isConnected) watchData.stepCount else 0
+    val stepProgress = (steps.toFloat() / dailyGoal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+    val calories = (steps * 0.04f).toInt()
+    val distanceKm = String.format(Locale.getDefault(), "%.1f", steps * 0.00075f)
+
+    val waterMl = hydration?.amountMl ?: 1250
+    val waterGoal = hydration?.goalMl ?: 2500
+    val waterPct = ((waterMl.toFloat() / waterGoal.coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100)
+    val totalFocusMins = focusSessions.sumOf { it.durationMinutes }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 18.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Spacer(modifier = Modifier.height(6.dp))
 
-            // 1. TOP HEADER (Greeting + Date + Bell + Avatar)
+            // 1. WEB-MATCHED HERO GREETING HEADER
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "$greeting,\n${userName.split(" ").firstOrNull() ?: "Gaurav"}",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary,
-                        lineHeight = 32.sp
+                        fontSize = 27.sp,
+                        lineHeight = 31.sp,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = formattedDate,
@@ -156,12 +184,12 @@ fun DashboardScreen(
                         )
                         Text(text = "  •  ", fontSize = 12.sp, color = TextTertiary)
                         Text(
-                            text = "INTELLIGENCE HUB",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                brush = Brush.linearGradient(listOf(palette.primary, palette.secondary))
-                            ),
+                            text = "Intelligence Hub",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
+                            style = TextStyle(
+                                brush = Brush.linearGradient(listOf(palette.primaryVariant, palette.secondary))
+                            )
                         )
                     }
                 }
@@ -173,11 +201,12 @@ fun DashboardScreen(
                     IconButton(
                         onClick = {
                             viewModel.sendTestAlert("Focus Reminder • WristOS")
-                            toastMessage = if (isConnected) "Haptic alert sent to Watch" else "Connect watch first to alert"
+                            toastMessage = if (isConnected) "Haptic alert sent to WatchOS" else "Connect watch first to alert"
                         },
                         modifier = Modifier
                             .size(40.dp)
-                            .background(palette.surface, CircleShape)
+                            .clip(CircleShape)
+                            .background(palette.surface.copy(alpha = 0.9f))
                             .border(1.dp, palette.border, CircleShape)
                     ) {
                         Icon(
@@ -191,9 +220,10 @@ fun DashboardScreen(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
+                            .shadow(10.dp, CircleShape, ambientColor = palette.gradEnd.copy(alpha = 0.4f))
                             .clip(CircleShape)
                             .background(Brush.linearGradient(listOf(palette.gradStart, palette.gradEnd)))
-                            .border(1.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                             .clickable { onNavigate(Screen.Settings.route) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -207,59 +237,72 @@ fun DashboardScreen(
                 }
             }
 
-            // Optional 1-tap permission banner for instant AI popup over ANY app
-            if (!canDrawOverlays) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = palette.surfaceElevated,
-                    border = BorderStroke(1.dp, palette.secondary.copy(alpha = 0.45f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                            context.startActivity(intent)
+            // 2. WATCH AI WAKE SETUP BANNER (if lockscreen/background wake permissions need approval)
+            if (needsWakeSetup) {
+                AuroraGlassCard(
+                    cornerRadius = 18.dp,
+                    highlightBorder = true,
+                    accentGlow = palette.secondary,
+                    onClick = {
+                        when {
+                            !canFullScreen && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                            !canDrawOverlays -> {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                            else -> onNavigate(Screen.Settings.route)
                         }
+                    }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = palette.secondary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(palette.secondary.copy(alpha = 0.18f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Bolt, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(18.dp))
+                        }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Enable Background Watch AI Wake",
+                                text = "Enable Watch → Phone AI Wake",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "Allow 'Appear on top' so watch opens AI even over other apps",
+                                text = when {
+                                    !canFullScreen -> "Allow Full-Screen Wake so watch opens AI over lockscreen"
+                                    !canDrawOverlays -> "Allow 'Appear on top' so watch opens mic over any app"
+                                    else -> "Allow Microphone permission for watch voice trigger"
+                                },
                                 fontSize = 11.sp,
                                 color = TextSecondary
                             )
                         }
-                        Text(
-                            text = "Enable →",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = palette.secondary
-                        )
+                        AuroraPillBadge(text = "Fix →", color = palette.secondary)
                     }
                 }
             }
 
-            // 2. WRISTOS TWILIGHT MOUNTAIN WATCH BANNER CARD (matches web artwork!)
+            // 3. TWILIGHT SUNSET MOUNTAIN WATCH HERO CARD (Web Artwork Match)
             Surface(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = palette.surface,
                 border = BorderStroke(
                     1.2.dp,
@@ -270,47 +313,36 @@ fun DashboardScreen(
                         )
                     )
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(16.dp, RoundedCornerShape(26.dp), ambientColor = palette.gradStart.copy(alpha = 0.25f))
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(104.dp)
-                ) {
-                    // Sunset Twilight & Layered Mountains Canvas
+                Box(modifier = Modifier.fillMaxWidth().height(108.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawRect(
                             brush = Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFF140C26),
-                                    Color(0xFF22133D),
-                                    Color(0xFF4F2445),
-                                    Color(0xFFC2644B)
-                                )
+                                listOf(Color(0xFF140C26), Color(0xFF22133D), Color(0xFF4F2445), Color(0xFFD97757))
                             )
                         )
                         drawCircle(
-                            color = Color(0xFFF59E0B).copy(alpha = 0.25f),
-                            radius = size.height * 0.65f,
-                            center = Offset(size.width * 0.55f, size.height * 0.95f)
+                            color = Color(0xFFF59E0B).copy(alpha = 0.28f),
+                            radius = size.height * 0.68f,
+                            center = Offset(size.width * 0.55f, size.height * 0.98f)
                         )
                         val ridge1 = Path().apply {
                             moveTo(0f, size.height * 0.78f)
                             lineTo(size.width * 0.18f, size.height * 0.56f)
                             lineTo(size.width * 0.36f, size.height * 0.72f)
-                            lineTo(size.width * 0.56f, size.height * 0.52f)
+                            lineTo(size.width * 0.56f, size.height * 0.50f)
                             lineTo(size.width * 0.78f, size.height * 0.70f)
-                            lineTo(size.width, size.height * 0.58f)
+                            lineTo(size.width, size.height * 0.56f)
                             lineTo(size.width, size.height)
                             lineTo(0f, size.height)
                             close()
                         }
-                        drawPath(
-                            path = ridge1,
-                            brush = Brush.verticalGradient(listOf(Color(0xFF2E1742), Color(0xFF140920)))
-                        )
+                        drawPath(ridge1, Brush.verticalGradient(listOf(Color(0xFF2E1742), Color(0xFF140920))))
                         val ridge2 = Path().apply {
-                            moveTo(0f, size.height * 0.86f)
+                            moveTo(0f, size.height * 0.87f)
                             lineTo(size.width * 0.24f, size.height * 0.70f)
                             lineTo(size.width * 0.45f, size.height * 0.84f)
                             lineTo(size.width * 0.72f, size.height * 0.65f)
@@ -319,52 +351,27 @@ fun DashboardScreen(
                             lineTo(0f, size.height)
                             close()
                         }
-                        drawPath(
-                            path = ridge2,
-                            brush = Brush.verticalGradient(listOf(Color(0xFF190A29), Color(0xFF090311)))
-                        )
+                        drawPath(ridge2, Brush.verticalGradient(listOf(Color(0xFF190A29), Color(0xFF090311))))
                     }
 
                     Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            // Mini Watch Dial Preview
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Box(
                                 modifier = Modifier
-                                    .size(58.dp)
+                                    .size(60.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF0A0614).copy(alpha = 0.92f))
-                                    .border(2.dp, Color.White.copy(alpha = 0.25f), CircleShape),
+                                    .background(Color(0xFF0A0614).copy(alpha = 0.90f))
+                                    .border(2.dp, Color.White.copy(alpha = 0.28f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "WristOS",
-                                        fontSize = 7.sp,
-                                        color = TextSecondary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = clockStr,
-                                        fontSize = 13.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Black,
-                                        color = TextPrimary
-                                    )
-                                    Text(
-                                        text = shortDateStr,
-                                        fontSize = 7.sp,
-                                        color = palette.secondary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text("WristOS", fontSize = 7.sp, color = TextSecondary, fontWeight = FontWeight.Bold)
+                                    Text(clockStr, fontSize = 14.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, color = TextPrimary)
+                                    Text(shortDateStr, fontSize = 7.sp, color = palette.secondary, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -374,18 +381,14 @@ fun DashboardScreen(
                                 Text(
                                     text = watchData.deviceName,
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 15.sp,
+                                    fontSize = 16.sp,
                                     color = TextPrimary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(3.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .background(statusDotColor, CircleShape)
-                                    )
+                                    Box(modifier = Modifier.size(8.dp).background(statusDotColor, CircleShape))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = when (watchData.connectionState) {
@@ -395,25 +398,24 @@ fun DashboardScreen(
                                             WatchConnectionState.DISCONNECTED -> "Disconnected"
                                         },
                                         fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.88f),
+                                        fontFamily = FontFamily.Monospace,
+                                        color = Color.White.copy(alpha = 0.90f),
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
                         }
 
-                        FilledTonalButton(
-                            onClick = {
-                                if (isConnected) viewModel.disconnectWatch()
-                                else viewModel.connectWatch()
-                            },
-                            enabled = !isScanning,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (isConnected) CoralWarning.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.16f),
-                                contentColor = if (isConnected) CoralWarning else TextPrimary
-                            ),
+                        Surface(
                             shape = RoundedCornerShape(14.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            color = if (isConnected) CoralWarning.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.16f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isConnected) CoralWarning.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.28f)
+                            ),
+                            modifier = Modifier.clickable(enabled = !isScanning) {
+                                if (isConnected) viewModel.disconnectWatch() else viewModel.connectWatch()
+                            }
                         ) {
                             Text(
                                 text = when {
@@ -422,195 +424,301 @@ fun DashboardScreen(
                                     else -> "Connect"
                                 },
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = if (isConnected) CoralWarning else TextPrimary,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
                             )
                         }
                     }
                 }
             }
 
-            // 3. 6 QUICK ACTION BUTTONS GRID (matches web Dashboard!)
+            // 4. 6 QUICK ACTION BUTTONS GRID (Exact Match to Web Dashboard!)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    QuickActionTile("Ask AI", Icons.Default.AutoAwesome, palette.primary, Modifier.weight(1f)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickActionTile("Ask AI", Icons.Default.AutoAwesome, Color(0xFFE879F9), Modifier.weight(1f)) {
                         onNavigate(Screen.Assistant.route)
                     }
                     QuickActionTile("Add Task", Icons.Default.CheckBox, Color(0xFF818CF8), Modifier.weight(1f)) {
                         modalTitle = ""; modalSub = "Today, 6:00 PM"; activeModal = "task"
                     }
-                    QuickActionTile("Reminder", Icons.Default.NotificationsActive, AmberAlert, Modifier.weight(1f)) {
+                    QuickActionTile("Reminder", Icons.Default.Notifications, AmberAlert, Modifier.weight(1f)) {
                         modalTitle = ""; modalSub = "In 30 minutes"; activeModal = "reminder"
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     QuickActionTile("Save Memory", Icons.Default.Psychology, palette.secondary, Modifier.weight(1f)) {
                         modalTitle = ""; modalTag = "Personal"; activeModal = "memory"
                     }
-                    QuickActionTile("Sync Watch", Icons.Default.Sync, EmeraldSuccess, Modifier.weight(1f)) {
-                        viewModel.syncTelemetry()
-                        toastMessage = if (isConnected) "Syncing telemetry..." else "Searching for watch..."
+                    QuickActionTile("Focus", Icons.Default.Timer, palette.primary, Modifier.weight(1f)) {
+                        onNavigate(Screen.Focus.route)
                     }
-                    QuickActionTile("Buzz Watch", Icons.Default.Vibration, CoralWarning, Modifier.weight(1f)) {
-                        viewModel.sendTestAlert("WristOS Ping!")
-                        toastMessage = if (isConnected) "Watch buzzed!" else "Watch is disconnected"
+                    QuickActionTile("Health", Icons.Default.Favorite, Color(0xFFFB7185), Modifier.weight(1f)) {
+                        onNavigate(Screen.Health.route)
                     }
                 }
             }
 
-            // 4. ACTIVITY ARC GAUGE & LIVE BIOMETRICS
-            val steps = if (isConnected) watchData.stepCount else 0
-            val stepProgress = (steps.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
-            val calories = (steps * 0.04f).toInt()
-            val distanceKm = String.format(Locale.getDefault(), "%.1f", steps * 0.00075f)
-
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = palette.surface,
-                border = BorderStroke(1.dp, palette.border),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "ACTIVITY & BIOMETRICS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp,
-                            color = TextSecondary
-                        )
-                        Text(
-                            text = "${(stepProgress * 100).toInt()}% of goal",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = palette.primary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Semicircular / Circular Arc Ring Gauge
-                        Box(
-                            modifier = Modifier.size(124.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                                val strokeWidth = 12.dp.toPx()
-                                drawArc(
-                                    color = Color.White.copy(alpha = 0.08f),
-                                    startAngle = 135f,
-                                    sweepAngle = 270f,
-                                    useCenter = false,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-                                    size = Size(size.width, size.height)
-                                )
-                                drawArc(
-                                    brush = Brush.sweepGradient(listOf(palette.gradStart, palette.gradEnd, palette.primary)),
-                                    startAngle = 135f,
-                                    sweepAngle = 270f * stepProgress.coerceAtLeast(0.03f),
-                                    useCenter = false,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-                                    size = Size(size.width, size.height)
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
-                                    contentDescription = null,
-                                    tint = palette.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (isConnected) "%,d".format(steps) else "--",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = TextPrimary
-                                )
-                                Text(
-                                    text = "/ %,d".format(dailyGoal),
-                                    fontSize = 10.sp,
-                                    color = TextTertiary
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Right Biometrics Stack
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            BiometricMiniRow(
-                                icon = Icons.Default.Favorite,
-                                label = "Heart Rate",
-                                value = if (isConnected && watchData.heartRate > 0) "${watchData.heartRate} BPM" else "-- BPM",
-                                accent = palette.secondary
-                            )
-                            BiometricMiniRow(
-                                icon = Icons.Default.LocalFireDepartment,
-                                label = "Active Burn",
-                                value = if (isConnected) "$calories kcal" else "-- kcal",
-                                accent = AmberAlert
-                            )
-                            BiometricMiniRow(
-                                icon = Icons.Default.Map,
-                                label = "Distance",
-                                value = if (isConnected) "$distanceKm km" else "-- km",
-                                accent = EmeraldSuccess
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 5. TODAY'S AGENDA PREVIEW
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = palette.surface,
-                border = BorderStroke(1.dp, palette.border),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+            // 5. AI DAILY INTELLIGENCE BRIEFING CARD (Matches Web Dashboard!)
+            AuroraGlassCard(highlightBorder = briefing != null) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(7.dp))
                             Text(
-                                text = "AGENDA",
+                                text = "AI DAILY INTELLIGENCE",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp,
-                                color = TextSecondary
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.1.sp,
+                                color = palette.primaryVariant
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = palette.primary.copy(alpha = 0.16f)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = palette.primary.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, palette.primary.copy(alpha = 0.38f)),
+                            modifier = Modifier.clickable(enabled = !isBriefingLoading) {
+                                viewModel.generateDailyBriefing()
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "$pendingTasksCount open",
-                                    fontSize = 10.sp,
+                                    text = if (isBriefingLoading) "Thinking..." else if (briefing != null) "Refresh" else "Get Briefing",
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = palette.primary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    color = palette.primaryVariant
                                 )
                             }
+                        }
+                    }
+
+                    val activeBriefing = briefing
+                    if (activeBriefing != null) {
+                        Text(text = activeBriefing.greeting, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, lineHeight = 19.sp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(palette.bgPrimary.copy(alpha = 0.7f))
+                                .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text("KEY PRIORITIES", fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = palette.secondary)
+                            activeBriefing.priorities.forEach { item ->
+                                Text("•  $item", fontSize = 12.sp, color = TextSecondary)
+                            }
+                        }
+                        Text(text = activeBriefing.healthInsight, fontSize = 11.sp, color = palette.primaryVariant, fontWeight = FontWeight.Medium)
+                    } else {
+                        Text(
+                            text = "Synthesize your ${pendingTasksCount} pending tasks, $memoriesCount vault facts, and watch metrics with Gemini / Smart Engine.",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+
+            // 6. ACTIVITY & HEALTH CARD (True 180° Semi-Circular Arc Gauge matching Web!)
+            AuroraGlassCard(onClick = { onNavigate(Screen.Health.route) }) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Activity & Health", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(16.dp))
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = palette.surfaceElevated,
+                            border = BorderStroke(1.dp, palette.border),
+                            modifier = Modifier.clickable {
+                                if (isConnected) viewModel.syncTelemetry() else viewModel.connectWatch()
+                                toastMessage = if (isConnected) "Syncing telemetry..." else "Searching for PineTime..."
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = palette.primary, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (isConnected) "Sync Watch" else "Connect", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primaryVariant)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // True 180° Semi-Circular Arc Gauge (matches Web SVG)
+                        Box(
+                            modifier = Modifier.width(136.dp).height(90.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                val sw = 12.dp.toPx()
+                                val arcSize = Size(size.width, size.width)
+                                drawArc(
+                                    color = Color.White.copy(alpha = 0.08f),
+                                    startAngle = 180f,
+                                    sweepAngle = 180f,
+                                    useCenter = false,
+                                    style = Stroke(width = sw, cap = StrokeCap.Round),
+                                    size = arcSize
+                                )
+                                drawArc(
+                                    brush = Brush.horizontalGradient(listOf(Color(0xFF38BDF8), palette.gradStart, palette.gradEnd)),
+                                    startAngle = 180f,
+                                    sweepAngle = 180f * stepProgress.coerceAtLeast(0.04f),
+                                    useCenter = false,
+                                    style = Stroke(width = sw, cap = StrokeCap.Round),
+                                    size = arcSize
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
+                                Text(
+                                    text = if (isConnected) "%,d".format(steps) else "0",
+                                    fontSize = 22.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Black,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Steps (Goal: ${dailyGoal / 1000}k)",
+                                    fontSize = 10.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            BiometricMiniRow(
+                                icon = Icons.Default.Favorite,
+                                label = "Heart Rate",
+                                value = if (isConnected && watchData.heartRate > 0) "${watchData.heartRate} bpm" else "-- bpm",
+                                accent = Color(0xFFF43F5E)
+                            )
+                            BiometricMiniRow(
+                                icon = Icons.Default.LocalFireDepartment,
+                                label = "Calories",
+                                value = "$calories kcal",
+                                accent = AmberAlert
+                            )
+                            BiometricMiniRow(
+                                icon = Icons.Default.Map,
+                                label = "Distance",
+                                value = "$distanceKm km",
+                                accent = Color(0xFF38BDF8)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 7. DAILY HYDRATION LOGGER CARD (Matches Web Dashboard!)
+            AuroraGlassCard(accentGlow = Color(0xFF38BDF8)) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WaterDrop, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Daily Hydration", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                        }
+                        Text(
+                            text = "$waterMl / $waterGoal ml ($waterPct%)",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF7DD3FC)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(9.dp)
+                            .clip(CircleShape)
+                            .background(palette.surfaceElevated)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(waterPct / 100f)
+                                .clip(CircleShape)
+                                .background(Brush.horizontalGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFF2DD4BF))))
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (waterMl >= waterGoal) "Hydration goal reached!" else "${waterGoal - waterMl} ml remaining today",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            WaterQuickChip("+250ml") {
+                                viewModel.addWater(250)
+                                toastMessage = "Added 250ml water intake"
+                            }
+                            WaterQuickChip("+500ml") {
+                                viewModel.addWater(500)
+                                toastMessage = "Added 500ml water intake"
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 8. TASKS & REMINDERS PROGRESS CARD (Matches Web Dashboard!)
+            AuroraGlassCard {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { onNavigate(Screen.Tasks.route) }
+                        ) {
+                            Icon(Icons.Default.CheckBox, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Tasks & Reminders", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                         }
                         Text(
                             text = "View All →",
@@ -621,115 +729,203 @@ fun DashboardScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            text = "$completedTasksCount of ${tasks.size} completed",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "$completionPct%",
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = palette.primaryVariant
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape)
+                            .background(palette.surfaceElevated)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(completionPct / 100f)
+                                .clip(CircleShape)
+                                .background(Brush.horizontalGradient(listOf(palette.gradStart, palette.gradEnd)))
+                        )
+                    }
 
                     if (pendingList.isEmpty()) {
                         Text(
-                            text = "Agenda clear! Tap 'Add Task' above or ask WristOS AI to plan your day.",
-                            fontSize = 13.sp,
+                            text = "Agenda clear! Tap 'Add Task' above or trigger Watch AI.",
+                            fontSize = 12.sp,
                             color = TextTertiary
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            pendingList.forEach { task ->
-                                Row(
+                        pendingList.forEach { task ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(palette.bgPrimary.copy(alpha = 0.6f))
+                                    .border(1.dp, palette.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                    .clickable { viewModel.toggleTask(task) }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(palette.surfaceElevated)
-                                        .clickable { viewModel.toggleTask(task) }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .size(18.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(if (task.isCompleted) palette.secondary else Color.Transparent)
+                                        .border(1.8.dp, palette.primary, RoundedCornerShape(5.dp)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .border(1.8.dp, palette.primary, CircleShape)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = task.title,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = task.dueTime,
-                                        fontSize = 11.sp,
-                                        color = TextSecondary
-                                    )
+                                    if (task.isCompleted) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(12.dp))
+                                    }
                                 }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = task.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (task.isCompleted) TextTertiary else TextPrimary,
+                                    textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = task.dueTime,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = TextSecondary
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // 6. AI SYSTEM DIGEST CARD
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = palette.surface,
-                border = BorderStroke(1.dp, palette.border),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigate(Screen.Assistant.route) }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    palette.gradStart.copy(alpha = 0.14f),
-                                    palette.gradEnd.copy(alpha = 0.09f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .padding(18.dp)
-                ) {
-                    Column {
+            // 9. HABITS & STREAKS CARD (Matches Web Dashboard!)
+            AuroraGlassCard(accentGlow = EmeraldSuccess) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val doneCount = habits.count { it.lastCompletedDate == todayKey }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(
-                                        Brush.linearGradient(listOf(palette.gradStart, palette.gradEnd)),
-                                        RoundedCornerShape(9.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = TextPrimary,
-                                    modifier = Modifier.size(16.dp)
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Habits & Streaks", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                        }
+                        Text(
+                            text = "$doneCount of ${habits.size} Done",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldSuccess
+                        )
+                    }
+
+                    habits.forEach { habit ->
+                        val isDone = habit.lastCompletedDate == todayKey
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(palette.bgPrimary.copy(alpha = 0.6f))
+                                .border(
+                                    1.dp,
+                                    if (isDone) EmeraldSuccess.copy(alpha = 0.45f) else palette.border.copy(alpha = 0.5f),
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .clickable {
+                                    viewModel.toggleHabit(habit)
+                                    toastMessage = "Habit progress updated"
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isDone) EmeraldSuccess else Color.Transparent)
+                                        .border(1.8.dp, if (isDone) EmeraldSuccess else TextTertiary, RoundedCornerShape(6.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isDone) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF06040D), modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = habit.title,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDone) TextTertiary else TextPrimary,
+                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
                                 )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "AI System Digest",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    brush = Brush.linearGradient(listOf(palette.primary, palette.secondary))
-                                ),
-                                fontWeight = FontWeight.ExtraBold
+                                text = "${habit.streakCount} days",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = AmberAlert
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (isConnected) {
-                                "Background BLE service active. You have $pendingTasksCount pending task(s) and $memoriesCount vault memories. Triple-click your watch button anytime—even with screen off—to talk to WristOS AI."
-                            } else {
-                                "Tap Connect above to pair your WristOS watch. Once linked, triple-clicking your watch button wakes AI automatically."
-                            },
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                            color = TextSecondary
-                        )
+                    }
+                }
+            }
+
+            // 10. FOCUS & KNOWLEDGE VAULT SUMMARY CARDS
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AuroraGlassCard(
+                    modifier = Modifier.weight(1f),
+                    onClick = { onNavigate(Screen.Focus.route) }
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(palette.primary.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Timer, contentDescription = null, tint = palette.primary, modifier = Modifier.size(18.dp))
+                        }
+                        Text("Focus & Deep Work", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("${focusSessions.size} sessions • ${totalFocusMins}m", fontSize = 11.sp, color = TextSecondary)
+                    }
+                }
+
+                AuroraGlassCard(
+                    modifier = Modifier.weight(1f),
+                    onClick = { onNavigate(Screen.Memory.route) }
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(palette.secondary.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Psychology, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(18.dp))
+                        }
+                        Text("Knowledge Vault", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("$memoriesCount stored facts", fontSize = 11.sp, color = TextSecondary)
                     }
                 }
             }
@@ -737,34 +933,16 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Toast Pill
         AnimatedVisibility(
             visible = toastMessage != null,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 12.dp)
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = palette.gradStart.copy(alpha = 0.95f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                shadowElevation = 10.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(toastMessage ?: "", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+            AuroraToastPill(message = toastMessage ?: "")
         }
     }
 
-    // Quick Action Modals
     if (activeModal != null) {
         val isTask = activeModal == "task"
         val isReminder = activeModal == "reminder"
@@ -850,25 +1028,25 @@ private fun QuickActionTile(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val palette = LocalWristOSPalette.current
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = palette.surface,
-        border = BorderStroke(1.dp, palette.border),
-        modifier = modifier.clickable(onClick = onClick)
+    AuroraGlassCard(
+        modifier = modifier,
+        cornerRadius = 18.dp,
+        accentGlow = iconTint,
+        onClick = onClick
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .background(iconTint.copy(alpha = 0.14f), RoundedCornerShape(10.dp)),
+                    .background(iconTint.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
+                    .border(1.dp, iconTint.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(18.dp))
+                Icon(imageVector = icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(17.dp))
             }
             Text(
                 text = label,
@@ -894,15 +1072,16 @@ private fun BiometricMiniRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(palette.surfaceElevated)
+            .background(palette.bgPrimary.copy(alpha = 0.55f))
+            .border(1.dp, palette.border.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = label, fontSize = 12.sp, color = TextSecondary)
+            Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(text = label, fontSize = 11.sp, color = TextSecondary)
         }
         Text(
             text = value,
@@ -910,6 +1089,24 @@ private fun BiometricMiniRow(
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             color = TextPrimary
+        )
+    }
+}
+
+@Composable
+private fun WaterQuickChip(label: String, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(11.dp),
+        color = Color(0xFF0284C7).copy(alpha = 0.20f),
+        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.42f)),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF7DD3FC),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
         )
     }
 }

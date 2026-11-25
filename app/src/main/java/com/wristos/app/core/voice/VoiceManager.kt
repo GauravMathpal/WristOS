@@ -3,8 +3,11 @@ package com.wristos.app.core.voice
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -32,8 +35,10 @@ class VoiceManager(context: Context) {
     private var speechRecognizer: SpeechRecognizer? = null
     private var silenceRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
     private var hasDeliveredResult = false
-    private var busyRetryUsed = false
+    private var retryCount = 0
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -103,8 +108,42 @@ class VoiceManager(context: Context) {
         mainHandler.postDelayed(runnable, delayMs)
     }
 
+    private fun requestVoiceAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .build()
+                audioFocusRequest = req
+                audioManager?.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun abandonVoiceAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.abandonAudioFocus(null)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     fun startListening(onResult: (String) -> Unit) {
-        busyRetryUsed = false
+        retryCount = 0
         startListeningInternal(onResult)
     }
 
@@ -134,6 +173,7 @@ class VoiceManager(context: Context) {
                 hasDeliveredResult = false
                 stopSpeaking()
                 cancelSilenceTimer()
+                requestVoiceAudioFocus()
                 speechRecognizer?.destroy()
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
 
@@ -167,20 +207,25 @@ class VoiceManager(context: Context) {
 
                     override fun onEndOfSpeech() {
                         cancelSilenceTimer()
+                        abandonVoiceAudioFocus()
                         _isListening.value = false
                         _rmsDb.value = 0f
                     }
 
                     override fun onError(error: Int) {
                         cancelSilenceTimer()
+                        abandonVoiceAudioFocus()
                         _rmsDb.value = 0f
                         Log.w("VoiceManager", "SpeechRecognizer error: $error")
 
-                        // If screen just woke and recognizer wasn't released cleanly, retry once
-                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY && !busyRetryUsed) {
-                            busyRetryUsed = true
+                        // When waking from locked/sleep state, audio HAL or recognizer may need a brief settle retry
+                        val isWakeRetryable = error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                            error == SpeechRecognizer.ERROR_AUDIO ||
+                            error == SpeechRecognizer.ERROR_CLIENT
+                        if (isWakeRetryable && retryCount < 2) {
+                            retryCount++
                             _isListening.value = false
-                            mainHandler.postDelayed({ startListeningInternal(onResult) }, 350L)
+                            mainHandler.postDelayed({ startListeningInternal(onResult) }, 450L)
                             return
                         }
 
@@ -263,6 +308,7 @@ class VoiceManager(context: Context) {
             hasDeliveredResult = true
         }
         cancelSilenceTimer()
+        abandonVoiceAudioFocus()
         _rmsDb.value = 0f
         try {
             speechRecognizer?.stopListening()

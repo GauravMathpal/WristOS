@@ -68,10 +68,28 @@ class WatchBleManager(private val context: Context) {
     private var reconnectAttempts = 0
     private var directConnectFailures = 0
     private var refreshedCacheForCurrentGatt = false
+    private var musicNotifyRetries = 0
     private var connectionWatchdogJob: Job? = null
     private var reconnectJob: Job? = null
     private var periodicSyncJob: Job? = null
     private var isExplicitDisconnect = false
+    @Volatile
+    private var isAppInForeground = false
+
+    fun setAppForeground(inForeground: Boolean) {
+        isAppInForeground = inForeground
+    }
+
+    fun canDrawOverlaysCompat(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            android.provider.Settings.canDrawOverlays(appContext)
+    }
+
+    fun canUseFullScreenIntentCompat(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val nm = appContext.getSystemService(NotificationManager::class.java) ?: return false
+        return nm.canUseFullScreenIntent()
+    }
 
     // Sequential BLE GATT operation queue (Android drops overlapping read/write/descriptor calls)
     private val gattOpQueue = ArrayDeque<() -> Boolean>()
@@ -227,6 +245,7 @@ class WatchBleManager(private val context: Context) {
                     }
 
                     clearGattQueue()
+                    musicNotifyRetries = 0
                     enqueueGattOp { syncCurrentTime(gatt) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_HRS, BleConstants.CHAR_HEART_RATE_MEASUREMENT) }
@@ -243,7 +262,19 @@ class WatchBleManager(private val context: Context) {
         }
 
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
-            scope.launch { finishCurrentGattOp() }
+            scope.launch {
+                if (status != BluetoothGatt.GATT_SUCCESS &&
+                    gatt != null &&
+                    descriptor?.characteristic?.uuid == BleConstants.CHAR_MUSIC_EVENT &&
+                    musicNotifyRetries < 2
+                ) {
+                    musicNotifyRetries++
+                    Log.w(TAG, "CHAR_MUSIC_EVENT CCCD write failed ($status); retrying ($musicNotifyRetries)")
+                    delay(200L)
+                    enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
+                }
+                finishCurrentGattOp()
+            }
         }
 
         @Deprecated("Deprecated in Java")
@@ -688,7 +719,9 @@ class WatchBleManager(private val context: Context) {
                     Log.d(TAG, "Received EVENT_TRIGGER_AI (0xAA) from watch!")
                     _pendingAiTrigger.value = System.currentTimeMillis()
                     _aiTriggerEvent.tryEmit(Unit)
-                    wakePhoneForAi()
+                    scope.launch {
+                        wakePhoneForAi()
+                    }
                 }
             }
         }
@@ -740,6 +773,7 @@ class WatchBleManager(private val context: Context) {
         try {
             // 1. Wake screen/CPU even when phone is locked or sleeping
             val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val isScreenInteractive = powerManager?.isInteractive == true
             @Suppress("DEPRECATION")
             val wakeLock = powerManager?.newWakeLock(
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
@@ -747,7 +781,7 @@ class WatchBleManager(private val context: Context) {
                     PowerManager.ON_AFTER_RELEASE,
                 "wristos:ai_wake"
             )
-            wakeLock?.acquire(8000L)
+            wakeLock?.acquire(10_000L)
 
             // 2. Haptic buzz confirmation
             if (prefs.vibrationAlerts.value) {
@@ -766,7 +800,12 @@ class WatchBleManager(private val context: Context) {
                 }
             }
 
-            // 3. Build Activity Intent + Full-Screen Intent Notification (required for Android 10-15 lockscreen/background wake)
+            if (isAppInForeground && isScreenInteractive) {
+                // MainScreen & AssistantScreen are already active and will immediately start the mic
+                return
+            }
+
+            // 3. Build Activity Intent + Full-Screen Intent Notification (required for Android 10-16 lockscreen/background wake)
             val intent = Intent(appContext, MainActivity::class.java).apply {
                 action = ACTION_TRIGGER_AI
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -787,9 +826,10 @@ class WatchBleManager(private val context: Context) {
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
-                .setTimeoutAfter(8000L)
+                .setTimeoutAfter(12_000L)
                 .setContentIntent(fullScreenPendingIntent)
                 .setFullScreenIntent(fullScreenPendingIntent, true)
+                .addAction(0, "Speak Now", fullScreenPendingIntent)
                 .build()
 
             val notifManager = appContext.getSystemService(NotificationManager::class.java)
@@ -800,7 +840,7 @@ class WatchBleManager(private val context: Context) {
                 notifManager?.notify(AI_WAKE_NOTIFICATION_ID, wakeNotification)
             }
 
-            // 4. Direct launch (succeeds immediately when app is active or SYSTEM_ALERT_WINDOW is granted)
+            // 4. Direct launch (succeeds immediately when app was recently active or SYSTEM_ALERT_WINDOW is granted)
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     val options = ActivityOptions.makeBasic()

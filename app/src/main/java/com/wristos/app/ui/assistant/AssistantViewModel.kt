@@ -61,11 +61,12 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
     fun handleWatchTriggerIfPending() {
         if (bleManager.consumePendingAiTrigger()) {
             bleManager.dismissWakeNotification()
+            voiceManager.clearError()
             voiceManager.playWakeChime()
             _remoteTriggerNotice.value = "Watch triggered AI (0xAA) • Listening..."
             viewModelScope.launch {
-                // Small delay allows screen/audio focus to settle when waking from locked state
-                delay(220L)
+                // Allow window focus and audio HAL to settle when waking from lockscreen/background
+                delay(320L)
                 if (prefs.autoListenOnTrigger.value && !voiceManager.isListening.value) {
                     startVoiceInput()
                 }

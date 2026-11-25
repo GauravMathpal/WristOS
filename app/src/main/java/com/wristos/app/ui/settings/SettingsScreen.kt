@@ -33,14 +33,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.wristos.app.BuildConfig
+import com.wristos.app.data.ble.BleManagerProvider
 import com.wristos.app.data.local.AppThemePreset
 import com.wristos.app.data.local.SettingsPreferences
+import com.wristos.app.navigation.Screen
 import com.wristos.app.ui.theme.*
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onNavigate: (String) -> Unit = {}
+) {
     val context = LocalContext.current
     val prefs = remember { SettingsPreferences.getInstance(context) }
+    val bleManager = remember { BleManagerProvider.getInstance(context) }
     val palette = LocalWristOSPalette.current
 
     val autoSync by prefs.autoSync.collectAsState()
@@ -53,48 +58,79 @@ fun SettingsScreen() {
     val savedGoal by prefs.dailyStepGoal.collectAsState()
     val customKey by prefs.customGeminiApiKey.collectAsState()
 
-    var activeTab by remember { mutableStateOf("preferences") } // preferences | appearance | background
+    var activeTab by remember { mutableStateOf("preferences") } // preferences | background | appearance
     var nameInput by remember(savedName) { mutableStateOf(savedName) }
     var goalInput by remember(savedGoal) { mutableStateOf(savedGoal.toString()) }
     var keyInput by remember(customKey) { mutableStateOf(customKey) }
     var statusNotice by remember { mutableStateOf<String?>(null) }
 
-    val canOverlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+    val canOverlay = bleManager.canDrawOverlaysCompat()
+    val canFullScreen = bleManager.canUseFullScreenIntentCompat()
     val powerMgr = context.getSystemService(PowerManager::class.java)
     val ignoringBattery = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
         (powerMgr?.isIgnoringBatteryOptimizations(context.packageName) == true)
     val hasNotifPerm = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
+    val hasMicPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+        PackageManager.PERMISSION_GRANTED
     val isGeminiReady = customKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Header
-        Column {
-            Text(
-                text = "SYSTEM CONTROL",
-                style = MaterialTheme.typography.labelMedium,
-                letterSpacing = 1.8.sp,
-                color = palette.primary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Settings & Themes",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextPrimary
-            )
+        AuroraSectionHeader(eyebrow = "HUB & SYSTEM", title = "More & Settings")
+
+        // Quick Module Shortcuts (Knowledge Vault & Focus Timer, matching Web Sidebar!)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AuroraGlassCard(
+                modifier = Modifier.weight(1f),
+                cornerRadius = 18.dp,
+                onClick = { onNavigate(Screen.Memory.route) }
+            ) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(34.dp).background(palette.secondary.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Psychology, contentDescription = null, tint = palette.secondary, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text("Knowledge Vault", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("Memories", fontSize = 10.sp, color = TextSecondary)
+                    }
+                }
+            }
+
+            AuroraGlassCard(
+                modifier = Modifier.weight(1f),
+                cornerRadius = 18.dp,
+                onClick = { onNavigate(Screen.Focus.route) }
+            ) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(34.dp).background(palette.primary.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Timer, contentDescription = null, tint = palette.primary, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text("Focus Timer", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("Pomodoro", fontSize = 10.sp, color = TextSecondary)
+                    }
+                }
+            }
         }
 
-        // Segmented Tabs (matches Web SettingsScreen!)
+        // Segmented Tabs
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -105,8 +141,8 @@ fun SettingsScreen() {
         ) {
             listOf(
                 "preferences" to "Sync & AI",
-                "background" to "Background",
-                "appearance" to "Appearance"
+                "background" to "AI Wake",
+                "appearance" to "Themes"
             ).forEach { (id, label) ->
                 val active = activeTab == id
                 Box(
@@ -132,83 +168,33 @@ fun SettingsScreen() {
         }
 
         if (statusNotice != null) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = EmeraldSuccess.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.4f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "⚡ $statusNotice",
-                    color = EmeraldSuccess,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
+            AuroraToastPill(message = statusNotice ?: "", modifier = Modifier.fillMaxWidth())
         }
 
         when (activeTab) {
             "preferences" -> {
-                Text(
-                    text = "HARDWARE & TELEMETRY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = palette.surface,
-                    border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                AuroraGlassCard(cornerRadius = 20.dp) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SettingsSwitchRow(
-                            title = "PineTime Auto-Sync",
-                            subtitle = "Periodically refresh battery & step counts",
-                            icon = Icons.Default.Sync,
-                            checked = autoSync,
-                            onCheckedChange = { prefs.setAutoSync(it) }
-                        )
+                        Text("HARDWARE & TELEMETRY", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primary, letterSpacing = 1.2.sp)
+                        SettingsSwitchRow("PineTime Auto-Sync", "Periodically refresh battery & step counts", Icons.Default.Sync, autoSync) {
+                            prefs.setAutoSync(it)
+                        }
                         HorizontalDivider(color = palette.border)
-                        SettingsSwitchRow(
-                            title = "Phone-to-Watch Notifications",
-                            subtitle = "Forward task reminders & alerts to Watch ANS",
-                            icon = Icons.Default.NotificationsActive,
-                            checked = notificationsEnabled,
-                            onCheckedChange = { prefs.setNotificationsEnabled(it) }
-                        )
+                        SettingsSwitchRow("Phone-to-Watch Notifications", "Forward task reminders & alerts to Watch ANS", Icons.Default.NotificationsActive, notificationsEnabled) {
+                            prefs.setNotificationsEnabled(it)
+                        }
                         HorizontalDivider(color = palette.border)
-                        SettingsSwitchRow(
-                            title = "Phone Haptic on Watch Trigger",
-                            subtitle = "Buzz phone when watch triggers AI",
-                            icon = Icons.Default.Vibration,
-                            checked = vibrationAlerts,
-                            onCheckedChange = { prefs.setVibrationAlerts(it) }
-                        )
+                        SettingsSwitchRow("Phone Haptic on Watch Trigger", "Buzz phone when watch triggers AI", Icons.Default.Vibration, vibrationAlerts) {
+                            prefs.setVibrationAlerts(it)
+                        }
                         HorizontalDivider(color = palette.border)
-                        SettingsSwitchRow(
-                            title = "Voice Speech Auto-Reply (TTS)",
-                            subtitle = "Read AI responses aloud automatically",
-                            icon = Icons.Default.VolumeUp,
-                            checked = ttsEnabled,
-                            onCheckedChange = { prefs.setTtsEnabled(it) }
-                        )
+                        SettingsSwitchRow("Voice Speech Auto-Reply (TTS)", "Read AI responses aloud automatically", Icons.Default.VolumeUp, ttsEnabled) {
+                            prefs.setTtsEnabled(it)
+                        }
                     }
                 }
 
-                Text(
-                    text = "AI ENGINE & API KEY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = palette.surface,
-                    border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                AuroraGlassCard(cornerRadius = 20.dp) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -216,68 +202,47 @@ fun SettingsScreen() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("Gemini 2.0 Flash + Offline Engine", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                                Text("Gemini Flash + Offline Engine", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
                                 Text(
                                     text = if (isGeminiReady) "Cloud Gemini API active" else "Offline Smart NLP Engine active",
                                     fontSize = 12.sp,
                                     color = if (isGeminiReady) EmeraldSuccess else palette.primary
                                 )
                             }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = (if (isGeminiReady) EmeraldSuccess else palette.primary).copy(alpha = 0.16f)
-                            ) {
-                                Text(
-                                    text = if (isGeminiReady) "CLOUD" else "OFFLINE",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isGeminiReady) EmeraldSuccess else palette.primary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
+                            AuroraPillBadge(
+                                text = if (isGeminiReady) "CLOUD" else "OFFLINE",
+                                color = if (isGeminiReady) EmeraldSuccess else palette.primary
+                            )
                         }
 
                         OutlinedTextField(
                             value = keyInput,
                             onValueChange = { keyInput = it },
-                            label = { Text("Optional Gemini API Key (overrides default)") },
+                            label = { Text("Optional Gemini API Key") },
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Button(
+                        AuroraGradientButton(
+                            text = "Save API Key",
                             onClick = {
                                 prefs.setCustomGeminiApiKey(keyInput)
-                                statusNotice = if (keyInput.isBlank()) "Cleared custom API key (Offline Smart Engine active)"
-                                else "Gemini API key saved"
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = palette.primary, contentColor = Color(0xFF06040D)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Save API Key", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
+                                statusNotice = if (keyInput.isBlank()) "Cleared API key (Offline Engine active)" else "Gemini API key saved"
+                            }
+                        )
                     }
                 }
             }
 
             "background" -> {
-                Text(
-                    text = "ALWAYS-ON WATCH AI WAKE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = palette.surface,
-                    border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                AuroraGlassCard(cornerRadius = 20.dp, highlightBorder = !canFullScreen || !canOverlay) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text("ALWAYS-ON WATCH AI WAKE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primary, letterSpacing = 1.2.sp)
+
                         SettingsSwitchRow(
                             title = "Auto-Listen When Watch Triggers AI",
-                            subtitle = "Start mic immediately on triple-click (0xAA)",
+                            subtitle = "Start mic immediately on AI bubble or triple-click (0xAA)",
                             icon = Icons.Default.Mic,
                             checked = autoListenOnTrigger,
                             onCheckedChange = { prefs.setAutoListenOnTrigger(it) }
@@ -286,15 +251,40 @@ fun SettingsScreen() {
                         HorizontalDivider(color = palette.border)
 
                         PermissionActionRow(
+                            title = "Microphone Access",
+                            subtitle = "Required to transcribe voice commands",
+                            granted = hasMicPerm,
+                            onAction = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                                )
+                            }
+                        )
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            HorizontalDivider(color = palette.border)
+                            PermissionActionRow(
+                                title = "Lockscreen Full-Screen Wake",
+                                subtitle = "Required on Android 14+ so Watch wakes AI over lockscreen",
+                                granted = canFullScreen,
+                                onAction = {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${context.packageName}"))
+                                    )
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(color = palette.border)
+
+                        PermissionActionRow(
                             title = "Display Over Other Apps",
-                            subtitle = "Allows Watch triple-click to launch AI from any screen or app",
+                            subtitle = "Required so Watch opens AI immediately even over other apps",
                             granted = canOverlay,
                             onAction = {
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}")
+                                context.startActivity(
+                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
                                 )
-                                context.startActivity(intent)
                             }
                         )
 
@@ -319,14 +309,15 @@ fun SettingsScreen() {
                         HorizontalDivider(color = palette.border)
 
                         PermissionActionRow(
-                            title = "Notifications & Lock-Screen Wake",
-                            subtitle = "Required on Android 13+ to wake phone when screen is off",
+                            title = "Notifications & Lockscreen",
+                            subtitle = "Required on Android 13+ for AI wake trigger notifications",
                             granted = hasNotifPerm,
                             onAction = {
-                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                }
-                                context.startActivity(intent)
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                )
                             }
                         )
                     }
@@ -334,32 +325,22 @@ fun SettingsScreen() {
             }
 
             "appearance" -> {
-                Text(
-                    text = "THEME PRESETS (WEB SYNCED)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.primary,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("THEME PRESETS (WEB SYNCED)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primary, letterSpacing = 1.2.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     AppThemePreset.entries.forEach { preset ->
                         val p = paletteForPreset(preset)
                         val selected = currentPreset == preset
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = palette.surface,
-                            border = BorderStroke(
-                                width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) p.primary else palette.border
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    prefs.setThemePreset(preset)
-                                    statusNotice = "Switched theme to ${preset.displayName}"
-                                }
+                        AuroraGlassCard(
+                            cornerRadius = 18.dp,
+                            highlightBorder = selected,
+                            accentGlow = p.primary,
+                            onClick = {
+                                prefs.setThemePreset(preset)
+                                statusNotice = "Switched theme to ${preset.displayName}"
+                            }
                         ) {
                             Row(
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -388,19 +369,9 @@ fun SettingsScreen() {
                     }
                 }
 
-                Text(
-                    text = "PROFILE & GOALS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = palette.surface,
-                    border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                AuroraGlassCard(cornerRadius = 20.dp) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("PROFILE & GOALS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = palette.primary, letterSpacing = 1.2.sp)
                         OutlinedTextField(
                             value = nameInput,
                             onValueChange = { nameInput = it },
@@ -415,38 +386,29 @@ fun SettingsScreen() {
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Button(
+                        AuroraGradientButton(
+                            text = "Save Profile",
                             onClick = {
                                 prefs.setUserName(nameInput)
                                 goalInput.toIntOrNull()?.let { prefs.setDailyStepGoal(it) }
                                 statusNotice = "Profile updated"
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = palette.primary, contentColor = Color(0xFF06040D)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Save Profile", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
+                            }
+                        )
                     }
                 }
             }
         }
 
-        // Specs Card
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = palette.surface,
-            border = BorderStroke(1.dp, palette.border),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        AuroraGlassCard(cornerRadius = 20.dp) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetaInfoRow("Ecosystem Version", "WristOS v1.16.0-PROD")
                 MetaInfoRow("Hardware Target", "PineTime (Nordic nRF52832)")
                 MetaInfoRow("BLE Bridge", "Foreground ConnectedDevice Service")
-                MetaInfoRow("Storage Layer", "Room 2.7 (SQLite v2)")
+                MetaInfoRow("Storage Layer", "Room 2.7 (SQLite v3)")
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -457,6 +419,7 @@ private fun PermissionActionRow(
     granted: Boolean,
     onAction: () -> Unit
 ) {
+    val palette = LocalWristOSPalette.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -468,22 +431,21 @@ private fun PermissionActionRow(
         }
         Spacer(modifier = Modifier.width(10.dp))
         if (granted) {
-            Surface(shape = RoundedCornerShape(8.dp), color = EmeraldSuccess.copy(alpha = 0.16f)) {
-                Text(
-                    text = "GRANTED",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = EmeraldSuccess,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                )
-            }
+            AuroraPillBadge(text = "GRANTED", color = EmeraldSuccess)
         } else {
-            Button(
-                onClick = onAction,
+            Surface(
                 shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                color = palette.primary.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, palette.primary),
+                modifier = Modifier.clickable(onClick = onAction)
             ) {
-                Text("Grant", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Grant",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = palette.primaryVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
         }
     }
@@ -499,15 +461,11 @@ fun SettingsSwitchRow(
 ) {
     val palette = LocalWristOSPalette.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(38.dp)
-                .background(palette.surfaceElevated, RoundedCornerShape(10.dp)),
+            modifier = Modifier.size(38.dp).background(palette.surfaceElevated, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = palette.primary, modifier = Modifier.size(20.dp))

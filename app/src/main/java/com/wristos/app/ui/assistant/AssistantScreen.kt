@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +72,9 @@ fun AssistantScreen(
 
     var viewMode by remember { mutableStateOf("orb") } // "orb" | "chat"
     var inputText by remember { mutableStateOf("") }
+    var isResumed by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
     val listState = rememberLazyListState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -91,22 +95,24 @@ fun AssistantScreen(
         }
     }
 
-    // Consume pending watch AI trigger reliably on mount, resume, and live updates!
-    LaunchedEffect(pendingAiTrigger) {
-        if (pendingAiTrigger != 0L) {
-            viewMode = "orb"
-            viewModel.handleWatchTriggerIfPending()
-        }
-    }
-
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.handleWatchTriggerIfPending()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isResumed = true
+                Lifecycle.Event.ON_PAUSE -> isResumed = false
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // ONLY consume watch trigger when Activity is truly RESUMED in foreground so mic is never blocked in background!
+    LaunchedEffect(pendingAiTrigger, isResumed) {
+        if (pendingAiTrigger != 0L && isResumed) {
+            viewMode = "orb"
+            viewModel.handleWatchTriggerIfPending()
+        }
     }
 
     LaunchedEffect(messages.size, viewMode) {
@@ -121,23 +127,15 @@ fun AssistantScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. WEB-STYLE LUXURY HEADER BAR
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surface.copy(alpha = 0.9f),
-            border = BorderStroke(1.dp, palette.border),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        // 1. WEB-STYLE AURORA HEADER
+        AuroraGlassCard(cornerRadius = 22.dp) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -147,53 +145,33 @@ fun AssistantScreen(
                                 .clickable { onNavigateBack() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ChevronLeft,
-                                contentDescription = "Back",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "WristOS AI",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = TextPrimary
-                                )
+                                Text("WristOS AI", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TextPrimary)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 val badgeColor = when {
                                     isListening -> PinkAccent
                                     isLoading -> AmberAlert
-                                    else -> palette.primary
+                                    else -> EmeraldSuccess
                                 }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = badgeColor.copy(alpha = 0.16f),
-                                    border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.45f))
-                                ) {
-                                    Text(
-                                        text = when {
-                                            isListening -> "LISTENING"
-                                            isLoading -> "THINKING"
-                                            else -> "READY"
-                                        },
-                                        fontSize = 9.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        color = badgeColor,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                    )
-                                }
+                                AuroraPillBadge(
+                                    text = when {
+                                        isListening -> "LISTENING"
+                                        isLoading -> "THINKING"
+                                        else -> "LIVE"
+                                    },
+                                    color = badgeColor
+                                )
                             }
                             Text(
-                                text = if (viewModel.isGeminiConfigured) "Gemini Flash • Watch Bridge" else "Smart Engine • Zero Latency",
+                                text = if (viewModel.isGeminiConfigured) "Gemini Flash • Watch Neural Bridge" else "Smart Engine • Zero Latency",
                                 fontSize = 11.sp,
-                                color = palette.primary.copy(alpha = 0.85f)
+                                color = palette.primaryVariant.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -228,12 +206,7 @@ fun AssistantScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = "Clear Chat",
-                                    tint = CoralWarning,
-                                    modifier = Modifier.size(15.dp)
-                                )
+                                Icon(Icons.Default.DeleteOutline, contentDescription = "Clear", tint = CoralWarning, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Clear", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                             }
@@ -241,12 +214,12 @@ fun AssistantScreen(
                     }
                 }
 
-                // Voice Orb / Chat Segmented Switcher
+                // Segmented Voice Orb / Chat Switcher
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(palette.bgPrimary)
+                        .background(palette.bgPrimary.copy(alpha = 0.75f))
                         .border(1.dp, palette.border, RoundedCornerShape(14.dp))
                         .padding(4.dp)
                 ) {
@@ -294,16 +267,7 @@ fun AssistantScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(remoteTriggerNotice ?: "", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     }
-                    Surface(shape = RoundedCornerShape(6.dp), color = EmeraldSuccess.copy(alpha = 0.25f)) {
-                        Text(
-                            text = "0xAA OK",
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = EmeraldSuccess,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
+                    AuroraPillBadge(text = "0xAA OK", color = EmeraldSuccess)
                 }
             }
         }
@@ -316,18 +280,10 @@ fun AssistantScreen(
                 border = BorderStroke(1.dp, CoralWarning.copy(alpha = 0.45f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = CoralWarning, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = voiceError ?: "",
-                        fontSize = 12.sp,
-                        color = CoralWarning,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Text(voiceError ?: "", fontSize = 12.sp, color = CoralWarning, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
                         viewModel.voiceManager.clearError()
                         requestMicAndListen()
@@ -338,15 +294,12 @@ fun AssistantScreen(
             }
         }
 
-        // 4. MAIN BODY: VOICE ORB HUD vs CHAT STREAM
+        // 4. MAIN BODY
         if (viewMode == "orb") {
-            Surface(
-                shape = RoundedCornerShape(26.dp),
-                color = palette.surface.copy(alpha = 0.85f),
-                border = BorderStroke(1.dp, palette.border),
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+            AuroraGlassCard(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                highlightBorder = isListening,
+                accentGlow = if (isListening) PinkAccent else palette.gradStart
             ) {
                 Column(
                     modifier = Modifier
@@ -356,9 +309,8 @@ fun AssistantScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
-                    // Animated Holographic Breathing Orb
                     BreathingVoiceOrb(
                         isListening = isListening,
                         isLoading = isLoading,
@@ -377,43 +329,35 @@ fun AssistantScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = when {
-                                isListening -> "Listening for command..."
+                                isListening -> "Listening on Phone..."
                                 isLoading -> "Thinking..."
                                 else -> "How can I help you?"
                             },
-                            fontSize = 20.sp,
+                            fontSize = 21.sp,
                             fontWeight = FontWeight.Black,
                             color = TextPrimary,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (isListening) "Speak clearly — pauses auto-submit" else "Tap the orb, mic, or triple-click watch",
+                            text = if (isListening) "Speak naturally — pause submits automatically" else "Tap the Orb or Watch AI bubble to speak",
                             fontSize = 12.sp,
                             color = TextSecondary,
                             textAlign = TextAlign.Center
                         )
                     }
 
-                    // 12-Bar Soundwave Equalizer
                     AudioEqualizerBars(isListening = isListening, isLoading = isLoading, rmsDb = rmsDb)
 
-                    // Live Teleprompter HUD
                     if (isListening) {
                         Surface(
                             shape = RoundedCornerShape(18.dp),
-                            color = palette.surfaceElevated,
-                            border = BorderStroke(1.dp, PinkAccent.copy(alpha = 0.6f)),
+                            color = palette.bgPrimary.copy(alpha = 0.78f),
+                            border = BorderStroke(1.dp, PinkAccent.copy(alpha = 0.55f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "LIVE VOICE TELEPROMPTER",
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PinkAccent
-                                )
+                                Text("LIVE VOICE CAPTURE", fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = PinkAccent)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = if (speechText.isNotBlank()) "\"$speechText\"" else "Listening... Speak your task or question",
@@ -422,29 +366,23 @@ fun AssistantScreen(
                                 )
                                 if (speechText.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    Button(
+                                    AuroraGradientButton(
+                                        text = "Send Now",
                                         onClick = {
                                             val text = speechText.trim()
                                             viewModel.voiceManager.stopListening(markDelivered = true)
                                             viewModel.sendMessage(text)
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess, contentColor = Color(0xFF06040D)),
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        Text("Send Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
+                                        }
+                                    )
                                 }
                             }
                         }
                     } else if (lastAssistantReply != null) {
                         Surface(
                             shape = RoundedCornerShape(18.dp),
-                            color = palette.surfaceElevated,
+                            color = palette.bgPrimary.copy(alpha = 0.72f),
                             border = BorderStroke(1.dp, palette.border),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewMode = "chat" }
+                            modifier = Modifier.fillMaxWidth().clickable { viewMode = "chat" }
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(
@@ -462,8 +400,7 @@ fun AssistantScreen(
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Open Chat →", fontSize = 11.sp, color = palette.primary, fontWeight = FontWeight.Bold)
+                                    Text("Chat →", fontSize = 11.sp, color = palette.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
@@ -477,10 +414,10 @@ fun AssistantScreen(
                         }
                     }
 
-                    // Watch Wake Test + Big Mic Controls
+                    // Compact Controls Row
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedButton(
                             onClick = { viewModel.triggerWatchWakeTest() },
@@ -492,44 +429,30 @@ fun AssistantScreen(
                             Text("Wake Test", fontSize = 12.sp, color = palette.primary, fontWeight = FontWeight.Bold)
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .size(62.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isListening) Brush.linearGradient(listOf(PinkAccent, CoralWarning))
-                                    else Brush.linearGradient(listOf(palette.gradStart, palette.gradEnd))
+                        AuroraGradientButton(
+                            text = if (isListening) "Stop Mic" else "Speak Now",
+                            onClick = {
+                                if (isListening) {
+                                    val captured = speechText.trim()
+                                    viewModel.voiceManager.stopListening(markDelivered = true)
+                                    if (captured.isNotBlank()) viewModel.sendMessage(captured)
+                                } else {
+                                    requestMicAndListen()
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = null,
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                                .clickable {
-                                    if (isListening) {
-                                        val captured = speechText.trim()
-                                        viewModel.voiceManager.stopListening(markDelivered = true)
-                                        if (captured.isNotBlank()) viewModel.sendMessage(captured)
-                                    } else {
-                                        requestMicAndListen()
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                                contentDescription = "Mic",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
+                            }
+                        )
                     }
 
-                    // 4 One-Tap Voice Command Chips
+                    // Quick Prompt Chips
                     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "QUICK VOICE COMMANDS",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            color = TextTertiary
-                        )
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             QuickCommandChip("Plan My Day", Modifier.weight(1f)) {
                                 viewModel.sendMessage("Plan my day and review pending tasks")
@@ -554,12 +477,9 @@ fun AssistantScreen(
                 }
             }
         } else {
-            // CHAT STREAM VIEW
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages, key = { it.id }) { msg ->
@@ -571,17 +491,10 @@ fun AssistantScreen(
             }
         }
 
-        // 5. BOTTOM PROMPT INPUT BAR (always reachable in both Orb & Chat modes!)
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surface,
-            border = BorderStroke(1.dp, palette.border),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        // 5. BOTTOM PROMPT INPUT BAR
+        AuroraGlassCard(cornerRadius = 22.dp) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -595,40 +508,37 @@ fun AssistantScreen(
                         }
                     },
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(40.dp)
                         .background(if (isListening) PinkAccent else palette.surfaceElevated, CircleShape)
                 ) {
                     Icon(
                         imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                         contentDescription = "Voice",
                         tint = if (isListening) TextPrimary else palette.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = {
-                        Text("Ask AI, add task (e.g. by tmr 5pm)...", color = TextTertiary, fontSize = 13.sp)
-                    },
+                    placeholder = { Text("Ask AI, add task, remember fact...", color = TextTertiary, fontSize = 13.sp) },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = palette.surfaceElevated,
-                        unfocusedContainerColor = palette.surfaceElevated,
-                        focusedBorderColor = palette.primary,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
                         cursorColor = palette.primary
                     ),
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(20.dp),
                     maxLines = 3
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 IconButton(
                     onClick = {
@@ -640,7 +550,7 @@ fun AssistantScreen(
                     },
                     enabled = inputText.isNotBlank() && !isLoading,
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(40.dp)
                         .background(
                             brush = if (inputText.isNotBlank() && !isLoading) {
                                 Brush.linearGradient(listOf(palette.gradStart, palette.gradEnd))
@@ -675,7 +585,7 @@ private fun BreathingVoiceOrb(
         initialValue = 0.94f,
         targetValue = if (isListening) 1.12f else 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = if (isListening) 700 else 2200, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = if (isListening) 650 else 2200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "orbPulse"
@@ -684,7 +594,7 @@ private fun BreathingVoiceOrb(
 
     Box(
         modifier = Modifier
-            .size(164.dp)
+            .size(172.dp)
             .scale(pulse + audioBoost)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -693,18 +603,26 @@ private fun BreathingVoiceOrb(
             val c1 = if (isListening) PinkAccent else palette.gradStart
             val c2 = if (isLoading) AmberAlert else palette.gradEnd
             drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(c1.copy(alpha = 0.35f), Color.Transparent)
-                ),
+                brush = Brush.radialGradient(listOf(c1.copy(alpha = 0.36f), Color.Transparent)),
                 radius = size.minDimension * 0.5f
             )
             drawCircle(
-                brush = Brush.linearGradient(listOf(c1, c2)),
-                radius = size.minDimension * 0.34f
+                color = c1.copy(alpha = 0.32f),
+                radius = size.minDimension * 0.43f,
+                style = Stroke(width = 2.dp.toPx())
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.25f),
-                radius = size.minDimension * 0.24f,
+                color = c2.copy(alpha = 0.25f),
+                radius = size.minDimension * 0.39f,
+                style = Stroke(width = 1.dp.toPx())
+            )
+            drawCircle(
+                brush = Brush.linearGradient(listOf(c1, c2)),
+                radius = size.minDimension * 0.33f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.24f),
+                radius = size.minDimension * 0.22f,
                 center = Offset(size.width * 0.44f, size.height * 0.42f)
             )
         }
@@ -765,7 +683,7 @@ private fun QuickCommandChip(
     val palette = LocalWristOSPalette.current
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = palette.surfaceElevated,
+        color = palette.bgPrimary.copy(alpha = 0.65f),
         border = BorderStroke(1.dp, palette.border),
         modifier = modifier.clickable(onClick = onClick)
     ) {
@@ -822,19 +740,7 @@ fun ChatBubble(message: AssistantMessage) {
 
             if (message.actionNotification != null) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = EmeraldSuccess.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.35f))
-                ) {
-                    Text(
-                        text = "⚡ ${message.actionNotification}",
-                        color = EmeraldSuccess,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                AuroraPillBadge(text = "⚡ ${message.actionNotification}", color = EmeraldSuccess)
             }
         }
     }
@@ -849,15 +755,8 @@ fun LoadingBubble() {
             color = palette.surfaceElevated,
             border = BorderStroke(1.dp, palette.border)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = palette.primary
-                )
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = palette.primary)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(text = "Thinking...", color = TextSecondary, fontSize = 13.sp)
             }
