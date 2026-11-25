@@ -145,9 +145,8 @@ class WatchBleService {
       return await this.connectWebBluetooth(onTelemetry, onAiTrigger, onDisconnected)
     }
 
-    // 3. Fallback to Simulator if browser lacks Bluetooth support
-    console.warn('Web Bluetooth API not supported in this browser. Using virtual telemetry.')
-    return this.simulateConnection(onTelemetry)
+    // 3. Do not fabricate virtual hardware when Web Bluetooth is unavailable
+    throw new Error('Web Bluetooth is unavailable in this browser. Open in Chrome/Edge or enable Virtual Simulator.')
   }
 
   private async connectWebBluetooth(
@@ -486,19 +485,6 @@ class WatchBleService {
     } catch (e) {
       console.warn('CTS time sync error:', e)
     }
-  }
-
-  private simulateConnection(onTelemetry: (t: Partial<WatchTelemetry>) => void): Promise<string> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        onTelemetry({
-          heartRate: 74,
-          stepCount: 7120,
-          batteryLevel: 86
-        })
-        resolve('WatchOS (BLE Simulator)')
-      }, 1000)
-    })
   }
 }
 

@@ -181,7 +181,7 @@ fun FocusScreen(
 
     val mins = secondsLeft / 60
     val secs = secondsLeft % 60
-    val formatted = String.format("%02d:%02d", mins, secs)
+    val formatted = String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
     val progress = 1f - (secondsLeft.toFloat() / totalSeconds.coerceAtLeast(1))
     val totalFocusMins = sessions.sumOf { it.durationMinutes }
 

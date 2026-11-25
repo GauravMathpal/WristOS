@@ -2,6 +2,7 @@ package com.wristos.app.data.ble
 
 import android.annotation.SuppressLint
 import android.app.ActivityOptions
+import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -73,6 +74,7 @@ class WatchBleManager(private val context: Context) {
     private var reconnectJob: Job? = null
     private var periodicSyncJob: Job? = null
     private var isExplicitDisconnect = false
+    private var isPassiveAutoConnectGatt = false
     @Volatile
     private var isAppInForeground = false
 
@@ -417,7 +419,7 @@ class WatchBleManager(private val context: Context) {
     fun ensureScanningOrConnected() {
         if (isExplicitDisconnect) return
         val state = _watchData.value.connectionState
-        if (state == WatchConnectionState.DISCONNECTED && !isScanning) {
+        if (state == WatchConnectionState.DISCONNECTED && (!isScanning || isPassiveAutoConnectGatt)) {
             startScan()
         }
     }
@@ -457,6 +459,10 @@ class WatchBleManager(private val context: Context) {
             }
         }
         reconnectJob?.cancel()
+
+        if (isPassiveAutoConnectGatt && bluetoothGatt != null) {
+            cleanupGatt()
+        }
 
         // First check if Android OS already maintains an active GATT/ACL connection (e.g. after app swipe-close & reopen)
         val osConnectedWatch = findAlreadyConnectedWatch()
@@ -588,12 +594,14 @@ class WatchBleManager(private val context: Context) {
         try {
             val savedDevice = adapter.getRemoteDevice(savedAddr)
             Log.d(TAG, "Attaching low-power autoConnect=true observer for $savedAddr")
+            isPassiveAutoConnectGatt = true
             bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 savedDevice.connectGatt(appContext, true, gattCallback, BluetoothDevice.TRANSPORT_LE)
             } else {
                 savedDevice.connectGatt(appContext, true, gattCallback)
             }
         } catch (_: Exception) {
+            isPassiveAutoConnectGatt = false
         }
     }
 
@@ -624,9 +632,9 @@ class WatchBleManager(private val context: Context) {
         bluetoothGatt = gatt
 
         connectionWatchdogJob = scope.launch {
-            delay(4500L)
+            delay(7500L)
             if (_watchData.value.connectionState == WatchConnectionState.CONNECTING) {
-                Log.d(TAG, "Direct connect timed out (>4.5s); falling back to LE scan")
+                Log.d(TAG, "Direct connect timed out (>7.5s); falling back to LE scan")
                 directConnectFailures++
                 cleanupGatt()
                 startActiveScan()
@@ -646,6 +654,7 @@ class WatchBleManager(private val context: Context) {
     }
 
     private fun cleanupGatt(alreadyDisconnected: Boolean = false) {
+        isPassiveAutoConnectGatt = false
         periodicSyncJob?.cancel()
         periodicSyncJob = null
         clearGattQueue()
@@ -722,7 +731,9 @@ class WatchBleManager(private val context: Context) {
         val hours = calendar.get(Calendar.HOUR_OF_DAY).toByte()
         val minutes = calendar.get(Calendar.MINUTE).toByte()
         val seconds = calendar.get(Calendar.SECOND).toByte()
-        val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK).toByte()
+        // BLE CTS (0x2A2B) uses ISO day of week: 1 = Monday .. 7 = Sunday
+        val calDay = calendar.get(Calendar.DAY_OF_WEEK)
+        val dayOfWeek = (if (calDay == Calendar.SUNDAY) 7 else calDay - 1).toByte()
 
         val payload = byteArrayOf(
             (year and 0xFF).toByte(),
@@ -889,8 +900,9 @@ class WatchBleManager(private val context: Context) {
                 }
             }
 
-            if (isAppInForeground && isScreenInteractive) {
-                // MainScreen & AssistantScreen are already active and will immediately start the mic
+            val keyguardManager = appContext.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            if (isAppInForeground && isScreenInteractive && keyguardManager?.isKeyguardLocked != true) {
+                // MainScreen & AssistantScreen are already visible and unlocked; they will start the mic directly
                 return
             }
 

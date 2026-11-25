@@ -54,6 +54,10 @@ fun HealthScreen(
     var subTab by remember { mutableStateOf("overview") } // overview | biometrics | wellness
     var showGoalDialog by remember { mutableStateOf(false) }
     var goalInput by remember(dailyGoal) { mutableStateOf(dailyGoal.toString()) }
+    var showWaterGoalDialog by remember { mutableStateOf(false) }
+    var waterGoalInput by remember(hydration?.goalMl) { mutableStateOf((hydration?.goalMl ?: 2500).toString()) }
+    var showAddHabitDialog by remember { mutableStateOf(false) }
+    var newHabitTitle by remember { mutableStateOf("") }
     var toastMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(toastMsg) {
@@ -267,11 +271,18 @@ fun HealthScreen(
                                 Text("Daily Hydration", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                             }
                             Text(
-                                text = "$waterMl / $waterGoal ml ($waterPct%)",
+                                text = "$waterMl / $waterGoal ml ($waterPct%) ✎",
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF38BDF8)
+                                color = Color(0xFF38BDF8),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        waterGoalInput = waterGoal.toString()
+                                        showWaterGoalDialog = true
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
 
@@ -329,7 +340,26 @@ fun HealthScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Habits & Streaks", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                             }
-                            AuroraPillBadge(text = "$doneToday / ${habits.size} Done", color = EmeraldSuccess)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AuroraPillBadge(text = "$doneToday / ${habits.size}", color = EmeraldSuccess)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = EmeraldSuccess.copy(alpha = 0.16f),
+                                    border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable {
+                                        newHabitTitle = ""
+                                        showAddHabitDialog = true
+                                    }
+                                ) {
+                                    Text(
+                                        text = "+ Habit",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldSuccess,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
 
                         habits.forEach { habit ->
@@ -373,13 +403,29 @@ fun HealthScreen(
                                         color = if (isDone) TextSecondary else TextPrimary
                                     )
                                 }
-                                Text(
-                                    text = "${habit.streakCount}d streak",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AmberAlert
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "${habit.streakCount}d",
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AmberAlert
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.deleteHabit(habit)
+                                            toastMsg = "Removed habit"
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.DeleteOutline,
+                                            contentDescription = "Delete habit",
+                                            tint = TextTertiary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -448,6 +494,67 @@ fun HealthScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showGoalDialog = false }) { Text("Cancel", color = TextSecondary) }
+            }
+        )
+    }
+
+    if (showWaterGoalDialog) {
+        AlertDialog(
+            onDismissRequest = { showWaterGoalDialog = false },
+            containerColor = palette.surfaceElevated,
+            title = { Text("Daily Hydration Goal", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = waterGoalInput,
+                    onValueChange = { waterGoalInput = it.filter(Char::isDigit) },
+                    label = { Text("Target milliliters (ml)") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        waterGoalInput.toIntOrNull()?.let { viewModel.setWaterGoal(it) }
+                        showWaterGoalDialog = false
+                        toastMsg = "Hydration goal updated"
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.primary, contentColor = Color(0xFF06040D))
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWaterGoalDialog = false }) { Text("Cancel", color = TextSecondary) }
+            }
+        )
+    }
+
+    if (showAddHabitDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddHabitDialog = false },
+            containerColor = palette.surfaceElevated,
+            title = { Text("New Daily Habit", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = newHabitTitle,
+                    onValueChange = { newHabitTitle = it },
+                    label = { Text("Habit name (e.g. Evening Stretch 15m)") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newHabitTitle.isNotBlank()) {
+                            viewModel.addHabit(newHabitTitle)
+                            newHabitTitle = ""
+                            showAddHabitDialog = false
+                            toastMsg = "Habit added"
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.primary, contentColor = Color(0xFF06040D))
+                ) { Text("Add Habit") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddHabitDialog = false }) { Text("Cancel", color = TextSecondary) }
             }
         )
     }

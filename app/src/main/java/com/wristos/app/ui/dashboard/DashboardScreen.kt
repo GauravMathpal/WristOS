@@ -435,8 +435,14 @@ fun DashboardScreen(
                                 1.dp,
                                 if (isConnected) CoralWarning.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.28f)
                             ),
-                            modifier = Modifier.clickable(enabled = !isScanning) {
-                                if (isConnected) viewModel.disconnectWatch() else viewModel.connectWatch()
+                            modifier = Modifier.clickable {
+                                if (isScanning) {
+                                    toastMessage = "Scanning BLE for WristOS watch..."
+                                } else if (isConnected) {
+                                    viewModel.disconnectWatch()
+                                } else {
+                                    viewModel.connectWatch()
+                                }
                             }
                         ) {
                             Text(

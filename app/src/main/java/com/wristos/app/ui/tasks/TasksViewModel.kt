@@ -83,6 +83,12 @@ class TasksViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateTask(task: TaskEntity) {
+        viewModelScope.launch {
+            taskDao.updateTask(task)
+        }
+    }
+
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
             taskDao.deleteTask(task)

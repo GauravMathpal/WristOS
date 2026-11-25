@@ -419,17 +419,17 @@ export function DevicesScreen() {
                       ) : (
                         <Battery className="w-3 h-3 text-emerald-400" />
                       )}
-                      <span className="text-emerald-400">{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}</span>
+                      <span className="text-emerald-400">{watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '--%'}</span>
                     </div>
                   </div>
 
                   {/* Watch Digital Clock Face */}
                   <div className="relative z-10 my-auto py-1">
                     <div className="text-4xl font-black font-mono text-white tracking-tight drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]">
-                      {currentTimeStr || '10:24'}
+                      {currentTimeStr || '--:--'}
                     </div>
                     <div className="text-[10px] text-pink-300 font-extrabold uppercase tracking-wider mt-0.5">
-                      {currentDateStr || 'Tue, 14 Nov'}
+                      {currentDateStr || '--'}
                     </div>
 
                     {/* Animated Pulsing Heartbeat ECG Line */}
@@ -455,11 +455,11 @@ export function DevicesScreen() {
                   <div className="relative z-10 flex items-center justify-between text-[10px] font-mono text-slate-300 pt-1.5 border-t border-white/10">
                     <span className="flex items-center gap-1 text-rose-400 font-bold">
                       <Heart className="w-3 h-3 fill-rose-500 animate-pulse text-rose-400" />
-                      <span>{watch.heartRate > 0 ? watch.heartRate : '74'} bpm</span>
+                      <span>{watch.heartRate > 0 ? watch.heartRate : '--'} bpm</span>
                     </span>
                     <span className="flex items-center gap-1 text-cyan-300 font-bold">
                       <Footprints className="w-3 h-3 text-cyan-400" />
-                      <span>{(watch.stepCount || 8420).toLocaleString()}</span>
+                      <span>{(watch.stepCount || 0).toLocaleString()}</span>
                     </span>
                   </div>
                 </div>

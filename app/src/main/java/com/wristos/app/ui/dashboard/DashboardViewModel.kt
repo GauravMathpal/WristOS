@@ -53,7 +53,10 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { list -> list.count { it.isCompleted } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val memoriesCount: StateFlow<Int> = database.memoryDao().getAllMemories()
+    val memories: StateFlow<List<MemoryEntity>> = database.memoryDao().getAllMemories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val memoriesCount: StateFlow<Int> = memories
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -131,6 +134,33 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun setWaterGoal(goalMl: Int) {
+        val clamped = goalMl.coerceIn(500, 10000)
+        viewModelScope.launch {
+            val current = database.hydrationDao().getForDate(todayKey)
+                ?: HydrationEntity(date = todayKey, amountMl = 0, goalMl = clamped)
+            database.hydrationDao().upsert(
+                current.copy(goalMl = clamped, updatedAt = System.currentTimeMillis())
+            )
+        }
+    }
+
+    fun addHabit(title: String, category: String = "Wellness") {
+        val clean = title.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            database.habitDao().insertHabit(
+                HabitEntity(title = clean, category = category.trim().ifEmpty { "Wellness" }, streakCount = 0)
+            )
+        }
+    }
+
+    fun deleteHabit(habit: HabitEntity) {
+        viewModelScope.launch {
+            database.habitDao().deleteHabit(habit)
+        }
+    }
+
     fun toggleHabit(habit: HabitEntity) {
         viewModelScope.launch {
             val completedToday = habit.lastCompletedDate == todayKey
@@ -156,7 +186,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val fallback = buildOfflineBriefing(pending, stepCount, goal, hr, focusMins)
             val cloudBriefing = geminiClient.generateDailyBriefing(
                 pendingTasks = pending.map { it.title to it.dueTime },
-                memories = emptyList(),
+                memories = memories.value.take(8).map { it.tag to it.fact },
                 steps = stepCount,
                 stepGoal = goal,
                 heartRateAvg = hr,

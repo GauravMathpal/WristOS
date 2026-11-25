@@ -240,7 +240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     connectionState: 'disconnected',
     heartRate: 0,
     stepCount: 0,
-    batteryLevel: 100,
+    batteryLevel: 0,
     lastSyncTime: null
   },
 

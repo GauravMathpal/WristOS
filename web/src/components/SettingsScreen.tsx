@@ -37,10 +37,25 @@ export function SettingsScreen() {
   const [customPrimary, setCustomPrimary] = useState(customColors.primary)
   const [customSecondary, setCustomSecondary] = useState(customColors.secondary)
 
-  // Hardware & Voice toggles
-  const [autoSync, setAutoSync] = useState(true)
-  const [notifications, setNotifications] = useState(true)
-  const [wristVibrate, setWristVibrate] = useState(true)
+  // Hardware & Voice toggles (persisted locally)
+  const [autoSync, setAutoSync] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wristos_auto_sync') !== 'false'
+    }
+    return true
+  })
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wristos_notifications') !== 'false'
+    }
+    return true
+  })
+  const [wristVibrate, setWristVibrate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wristos_wrist_vibrate') !== 'false'
+    }
+    return true
+  })
   const [exportNotice, setExportNotice] = useState<string | null>(null)
   const [ttsEnabled, setTtsEnabled] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -582,7 +597,11 @@ export function SettingsScreen() {
                   <p className="text-[11px] text-purple-200/80 font-medium">Vibrate smartwatch for alarms, focus blocks, and reminders</p>
                 </div>
                 <button
-                  onClick={() => setWristVibrate(!wristVibrate)}
+                  onClick={() => {
+                    const next = !wristVibrate
+                    setWristVibrate(next)
+                    if (typeof window !== 'undefined') localStorage.setItem('wristos_wrist_vibrate', String(next))
+                  }}
                   className={`w-12 h-6 rounded-full p-0.5 transition-colors ${wristVibrate ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-md shadow-pink-500/40' : 'bg-slate-800'}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${wristVibrate ? 'translate-x-6' : 'translate-x-0'}`} />
@@ -599,7 +618,11 @@ export function SettingsScreen() {
                   <p className="text-[11px] text-purple-200/80 font-medium">Send agenda reminders and updates directly to your watch</p>
                 </div>
                 <button
-                  onClick={() => setNotifications(!notifications)}
+                  onClick={() => {
+                    const next = !notifications
+                    setNotifications(next)
+                    if (typeof window !== 'undefined') localStorage.setItem('wristos_notifications', String(next))
+                  }}
                   className={`w-12 h-6 rounded-full p-0.5 transition-colors ${notifications ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-md shadow-pink-500/40' : 'bg-slate-800'}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${notifications ? 'translate-x-6' : 'translate-x-0'}`} />
@@ -616,7 +639,11 @@ export function SettingsScreen() {
                   <p className="text-[11px] text-purple-200/80 font-medium">Keep daily step count and heart rate synced in real-time</p>
                 </div>
                 <button
-                  onClick={() => setAutoSync(!autoSync)}
+                  onClick={() => {
+                    const next = !autoSync
+                    setAutoSync(next)
+                    if (typeof window !== 'undefined') localStorage.setItem('wristos_auto_sync', String(next))
+                  }}
                   className={`w-12 h-6 rounded-full p-0.5 transition-colors ${autoSync ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-md shadow-pink-500/40' : 'bg-slate-800'}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${autoSync ? 'translate-x-6' : 'translate-x-0'}`} />

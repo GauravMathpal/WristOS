@@ -40,6 +40,7 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
     var filter by remember { mutableStateOf("all") } // all | pending | completed
     var quickInput by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
     var newTaskTitle by remember { mutableStateOf("") }
     var newTaskDueTime by remember { mutableStateOf("Today, 6:00 PM") }
     var newTaskPriority by remember { mutableStateOf("normal") }
@@ -66,7 +67,13 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showDialog = true },
+                onClick = {
+                    editingTask = null
+                    newTaskTitle = ""
+                    newTaskDueTime = "Today, 6:00 PM"
+                    newTaskPriority = "normal"
+                    showDialog = true
+                },
                 containerColor = palette.secondary,
                 contentColor = TextPrimary,
                 shape = CircleShape
@@ -212,6 +219,13 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
                             TaskCard(
                                 task = task,
                                 onToggle = { viewModel.toggleTask(task) },
+                                onEdit = {
+                                    editingTask = task
+                                    newTaskTitle = task.title
+                                    newTaskDueTime = task.dueTime
+                                    newTaskPriority = task.priority
+                                    showDialog = true
+                                },
                                 onAlertWatch = {
                                     viewModel.sendTaskAlertToWatch(task)
                                     toastMsg = "Sent \"${task.title}\" alert to watch"
@@ -231,9 +245,15 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
 
         if (showDialog) {
             AlertDialog(
-                onDismissRequest = { showDialog = false },
+                onDismissRequest = { showDialog = false; editingTask = null },
                 containerColor = palette.surfaceElevated,
-                title = { Text("Create Task", color = TextPrimary, fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        if (editingTask == null) "Create Task" else "Edit Task",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(
@@ -263,7 +283,21 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
                     Button(
                         onClick = {
                             if (newTaskTitle.isNotBlank()) {
-                                viewModel.addTask(newTaskTitle, newTaskDueTime, newTaskPriority)
+                                val target = editingTask
+                                if (target != null) {
+                                    viewModel.updateTask(
+                                        target.copy(
+                                            title = newTaskTitle.trim(),
+                                            dueTime = newTaskDueTime.trim().ifEmpty { "Today" },
+                                            priority = newTaskPriority
+                                        )
+                                    )
+                                    toastMsg = "Task updated"
+                                } else {
+                                    viewModel.addTask(newTaskTitle, newTaskDueTime, newTaskPriority)
+                                    toastMsg = "Task added"
+                                }
+                                editingTask = null
                                 newTaskTitle = ""
                                 newTaskDueTime = "Today, 6:00 PM"
                                 newTaskPriority = "normal"
@@ -271,10 +305,10 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = palette.primary, contentColor = Color(0xFF06040D))
-                    ) { Text("Add Task") }
+                    ) { Text(if (editingTask == null) "Add Task" else "Save") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDialog = false }) { Text("Cancel", color = TextSecondary) }
+                    TextButton(onClick = { showDialog = false; editingTask = null }) { Text("Cancel", color = TextSecondary) }
                 }
             )
         }
@@ -285,6 +319,7 @@ fun TasksScreen(viewModel: TasksViewModel = viewModel()) {
 fun TaskCard(
     task: TaskEntity,
     onToggle: () -> Unit,
+    onEdit: () -> Unit,
     onAlertWatch: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -347,6 +382,9 @@ fun TaskCard(
                 }
             }
 
+            IconButton(onClick = onEdit, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary, modifier = Modifier.size(16.dp))
+            }
             IconButton(onClick = onAlertWatch, modifier = Modifier.size(30.dp)) {
                 Icon(Icons.Default.Watch, contentDescription = "Send to Watch", tint = palette.primary, modifier = Modifier.size(17.dp))
             }

@@ -104,6 +104,15 @@ class VoiceManager(context: Context) {
         if (!enabled) stopSpeaking()
     }
 
+    private fun cleanupRecognizer() {
+        try {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        } catch (_: Exception) {
+        }
+        speechRecognizer = null
+    }
+
     private fun cancelSilenceTimer() {
         silenceRunnable?.let { mainHandler.removeCallbacks(it) }
         silenceRunnable = null
@@ -201,12 +210,7 @@ class VoiceManager(context: Context) {
 
             // If we need to recreate the recognizer cleanly, destroy first and wait 160ms so Google's ServiceConnection unbinds cleanly
             if (speechRecognizer != null) {
-                try {
-                    speechRecognizer?.cancel()
-                    speechRecognizer?.destroy()
-                } catch (_: Exception) {
-                }
-                speechRecognizer = null
+                cleanupRecognizer()
                 val delayed = Runnable { launchRecognizerNow(onResult) }
                 startDelayRunnable = delayed
                 mainHandler.postDelayed(delayed, 160L)
@@ -237,6 +241,7 @@ class VoiceManager(context: Context) {
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
@@ -279,18 +284,21 @@ class VoiceManager(context: Context) {
                     _rmsDb.value = 0f
                     Log.w("VoiceManager", "SpeechRecognizer error: $error (retry=$retryCount, onDevice=$isUsingOnDeviceRecognizer)")
 
-                    // Error 11 = ERROR_SERVER_DISCONNECTED: try on-device recognizer once if available, otherwise launch system voice sheet cleanly
-                    if (error == 11) {
+                    // Error 11 = ERROR_SERVER_DISCONNECTED: unbind dead recognizer, try on-device/clean rebind once, otherwise open system mic sheet
+                    if (error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
+                        cleanupRecognizer()
                         val canUseOnDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext) &&
                             !isUsingOnDeviceRecognizer
-                        if (canUseOnDevice && retryCount == 0) {
+                        if (retryCount == 0) {
                             retryCount++
-                            preferOfflineNextAttempt = true
+                            if (canUseOnDevice) {
+                                preferOfflineNextAttempt = true
+                            }
                             _isListening.value = false
                             val delayed = Runnable { launchRecognizerNow(onResult) }
                             startDelayRunnable = delayed
-                            mainHandler.postDelayed(delayed, 180L)
+                            mainHandler.postDelayed(delayed, 200L)
                             return
                         }
                         if (fallbackLauncherCallback != null) {
@@ -308,6 +316,7 @@ class VoiceManager(context: Context) {
                         error == SpeechRecognizer.ERROR_NETWORK
 
                     if (isTransient && retryCount < 2) {
+                        cleanupRecognizer()
                         retryCount++
                         if (error == SpeechRecognizer.ERROR_NETWORK) {
                             preferOfflineNextAttempt = true
@@ -339,7 +348,7 @@ class VoiceManager(context: Context) {
                         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognizer busy — tap to retry"
                         SpeechRecognizer.ERROR_SERVER -> "Google Speech server error"
                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap the Orb to speak."
-                        11 -> "Voice service disconnected — tap Retry for system mic"
+                        SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> "Voice service disconnected — tap Retry for system mic"
                         else -> "Voice input interrupted (code $error) — tap Retry"
                     }
                     _errorMessage.value = errorDesc

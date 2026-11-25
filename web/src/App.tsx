@@ -41,7 +41,7 @@ import { LoginScreen } from './components/LoginScreen'
 import { WristOSLogoIcon } from './components/BrandLogos'
 
 export function App() {
-  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, disconnectWatch, currentUser, logoutUser } = useAppStore()
+  const { viewMode, setViewMode, activeTab, setActiveTab, watch, connectWatch, currentUser, logoutUser } = useAppStore()
   const { mode, setMode } = useThemeStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -251,14 +251,14 @@ export function App() {
             </div>
 
             <div className="text-[11px] text-slate-300 flex justify-between font-mono">
-              <span className="text-emerald-400">BAT: {watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}</span>
-              <span className="text-pink-400">HRS: {watch.heartRate > 0 ? `${watch.heartRate} bpm` : '78 bpm'}</span>
+              <span className="text-emerald-400">BAT: {watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '--%'}</span>
+              <span className="text-pink-400">HRS: {watch.heartRate > 0 ? `${watch.heartRate} bpm` : '-- bpm'}</span>
             </div>
 
             <motion.button
               whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-              onClick={isConnected ? disconnectWatch : connectWatch}
+              onClick={() => (isConnected ? setActiveTab('devices') : connectWatch())}
               className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all shadow-md ${
                 isConnected
                   ? 'bg-purple-900/30 hover:bg-rose-500/15 text-slate-200 hover:text-rose-400 border border-purple-500/30'
@@ -318,7 +318,7 @@ export function App() {
                 {isConnected ? 'Watch Connected' : 'Watch Standby'}
               </span>
               <span className="text-[10px] text-purple-300 font-mono">
-                {watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '94%'}
+                {watch.batteryLevel > 0 ? `${watch.batteryLevel}%` : '--%'}
               </span>
             </div>
 
