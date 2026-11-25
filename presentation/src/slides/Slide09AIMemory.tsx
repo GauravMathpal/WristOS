@@ -35,27 +35,36 @@ export const Slide09AIMemory: React.FC<SlideProps> = ({ isActive }) => {
       )
 
       gsap.to('.s9a-orb-glow', {
-        scale: 1.24,
-        opacity: 0.85,
+        scale: 1.28,
+        opacity: 0.9,
         duration: 1.7,
         yoyo: true,
         repeat: -1,
         ease: 'sine.inOut',
       })
-      gsap.to('.s9a-orb-ring', {
-        scale: 1.5,
-        opacity: 0,
-        duration: 2.0,
-        repeat: -1,
-        ease: 'power1.out',
-      })
-      gsap.to('.s9a-watch-orb', {
-        scale: 1.32,
-        opacity: 0,
-        duration: 1.8,
-        repeat: -1,
-        ease: 'power1.out',
-      })
+      gsap.fromTo(
+        '.s9a-orb-ring',
+        { scale: 0.88, opacity: 0.75 },
+        {
+          scale: 1.65,
+          opacity: 0,
+          duration: 2.2,
+          stagger: 1.1,
+          repeat: -1,
+          ease: 'power1.out',
+        }
+      )
+      gsap.fromTo(
+        '.s9a-watch-orb',
+        { scale: 0.85, opacity: 0.8 },
+        {
+          scale: 1.48,
+          opacity: 0,
+          duration: 1.8,
+          repeat: -1,
+          ease: 'power1.out',
+        }
+      )
 
       tlRef.current = tl
     }, rootRef)
@@ -96,19 +105,20 @@ export const Slide09AIMemory: React.FC<SlideProps> = ({ isActive }) => {
               className="w-full h-full object-contain"
             />
 
-            {/* Breathing Aura + Sonar Ring centered exactly on the App AI Orb */}
+            {/* Breathing Aura + Outward Sonar Rings centered strictly on the App AI Orb */}
             <div
-              className="absolute pointer-events-none flex items-center justify-center"
-              style={{ left: '33.6%', top: '41.5%', transform: 'translate(-50%, -50%)' }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
+              style={{ left: '34.9%', top: '35.85%' }}
             >
               <div
-                className="s9a-orb-glow w-28 h-28 md:w-36 md:h-36 rounded-full mix-blend-screen opacity-55 blur-xl"
+                className="s9a-orb-glow w-24 h-24 md:w-32 md:h-32 rounded-full mix-blend-screen opacity-55 blur-xl"
                 style={{
                   background:
-                    'radial-gradient(circle, rgba(192,132,252,0.8) 0%, rgba(236,72,153,0.4) 55%, transparent 75%)',
+                    'radial-gradient(circle, rgba(192,132,252,0.8) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',
                 }}
               />
-              <div className="s9a-orb-ring absolute w-24 h-24 md:w-32 md:h-32 rounded-full border border-violet-300/60" />
+              <div className="s9a-orb-ring absolute w-20 h-20 md:w-[116px] md:h-[116px] rounded-full border border-violet-300/75" />
+              <div className="s9a-orb-ring absolute w-20 h-20 md:w-[116px] md:h-[116px] rounded-full border border-pink-300/60" />
             </div>
           </div>
 
@@ -144,9 +154,11 @@ export const Slide09AIMemory: React.FC<SlideProps> = ({ isActive }) => {
                     className="w-full h-full object-cover"
                   />
                   <div
-                    className="s9a-watch-orb absolute w-12 h-12 md:w-14 md:h-14 rounded-full border border-cyan-300/75 pointer-events-none"
-                    style={{ left: '50%', top: '31%', transform: 'translate(-50%, -50%)' }}
-                  />
+                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
+                    style={{ left: '50%', top: '30.4%' }}
+                  >
+                    <div className="s9a-watch-orb w-12 h-12 md:w-14 md:h-14 rounded-full border border-cyan-300/80" />
+                  </div>
                 </div>
               </div>
               <span className="text-xs font-semibold text-white mt-2.5">Watch AI Wake</span>

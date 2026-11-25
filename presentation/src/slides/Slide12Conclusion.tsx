@@ -226,15 +226,17 @@ export const Slide12Conclusion: React.FC<SlideProps> = ({ isActive }) => {
                 />
                 {pair.hasOrb && (
                   <div
-                    className="s12-orb-pulse absolute w-20 h-20 md:w-28 md:h-28 rounded-full mix-blend-screen blur-lg opacity-55 pointer-events-none"
-                    style={{
-                      left: '50%',
-                      top: '46%',
-                      transform: 'translate(-50%, -50%)',
-                      background:
-                        'radial-gradient(circle, rgba(192,132,252,0.85) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',
-                    }}
-                  />
+                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
+                    style={{ left: '46.6%', top: '40.4%' }}
+                  >
+                    <div
+                      className="s12-orb-pulse w-20 h-20 md:w-28 md:h-28 rounded-full mix-blend-screen blur-lg opacity-55"
+                      style={{
+                        background:
+                          'radial-gradient(circle, rgba(192,132,252,0.85) 0%, rgba(236,72,153,0.45) 55%, transparent 75%)',
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>
