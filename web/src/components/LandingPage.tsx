@@ -35,7 +35,8 @@ import {
   User,
   LogOut,
   Menu,
-  X
+  X,
+  Presentation
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { DualBrandHeader } from './BrandLogos'
@@ -1876,6 +1877,35 @@ export function LandingPage() {
           </div>
 
         </div>
+
+        {/* Interactive Project Presentation Sub-URL Banner */}
+        <div className="mt-8 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#1a1135] via-[#120d26] to-[#0c1428] border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 shadow-xl">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-violet-500/20 text-violet-300 flex items-center justify-center border border-violet-400/35 shrink-0">
+              <Presentation className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-violet-300">
+                Design Thinking Lab • Interactive Keynote
+              </span>
+              <h3 className="text-lg sm:text-xl font-bold text-white mt-0.5">
+                WristOS Project Presentation
+              </h3>
+              <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+                Explore the 12-slide interactive project deck featuring research insights, live Watch OS previews, Gemini AI flows, and architecture.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="/presentation/"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 text-white font-bold text-xs shadow-lg shadow-violet-600/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+          >
+            <Presentation className="w-4 h-4" />
+            <span>Open Presentation</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
       </section>
 
       {/* ============================================================ */}
@@ -1895,10 +1925,13 @@ export function LandingPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6 font-mono text-[11px]">
+        <div className="flex flex-wrap items-center justify-center gap-6 font-mono text-[11px]">
           <span className="flex items-center gap-1.5 text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> InfiniTime 1.16 Ready
           </span>
+          <a href="/presentation/" className="text-violet-300 hover:text-white transition-colors font-semibold">
+            Presentation
+          </a>
           <a href="https://github.com/GauravMathpal/WristOS" target="_blank" rel="noreferrer" className="hover:text-purple-300 transition-colors">
             GitHub Source
           </a>
