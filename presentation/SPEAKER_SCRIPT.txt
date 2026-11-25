@@ -1,0 +1,126 @@
+WRISTOS — PRESENTATION SPEAKER SCRIPT (FLOW-WISE)
+Design Thinking Lab (HSMC-101) | Graphic Era Hill University, Dehradun
+Target Duration: ~5 Minutes (12 Slides)
+
+Speaking Split:
+- Gaurav Mathpal (Team Leader): Slides 01–04 + Slide 12 (~110s)
+- Ashish Sanjay Hatwal: Slides 05–06 (~70s)
+- Daksh Jain: Slides 07–09 (~80s)
+- Dhruv Singh Bhandari: Slide 10 quick intro (~10s)
+- Atharv Santosh Gaikwad: Slide 10 BLE (~15s)
+- Arjun Sharma: Slide 11 Safety (~10s)
+- Ravikant Kushwah: Slide 11 Deliverables (~10s)
+
+======================================================================
+SLIDE 01 — COVER & TEAM INTRODUCTION (~20s)
+Speaker: Gaurav Mathpal (Team Leader)
+======================================================================
+"Good morning everyone, and respected faculty coordinator Dr. Sateesh K. Yadav.
+I am Gaurav Mathpal, leading our seven-member team — Ashish, Daksh, Arjun, Atharv, Dhruv, and Ravikant — to present our Design Thinking Lab project: WristOS."
+
+======================================================================
+SLIDE 02 — THE HOOK (~25s)
+Speaker: Gaurav Mathpal (Team Leader)
+======================================================================
+"Before we talk about any software or hardware, let me ask you a simple question:
+How many of you felt today that your day wasn't as productive as you wanted it to be?
+
+When I spoke with people I work with around the world — including professionals in top management roles — I heard the exact same struggle: competing priorities, small commitments slipping through the cracks, and jumping between too many tools.
+
+In this digital age, our first thought was: why not use AI to solve everyday productivity?
+But building just another mobile app creates the exact distraction we are trying to avoid — you unlock your phone to check one reminder, and twenty minutes vanish into notifications. We needed something beyond the phone."
+
+======================================================================
+SLIDE 03 — 250+ SURVEY & THE AI CONTEXT GAP (~25s)
+Speaker: Gaurav Mathpal (Team Leader)
+======================================================================
+"So we looked at what people already wear every day.
+In our illustrative 250+ profile survey spanning India, the US, the UK, Germany, Australia, and Russia, 85.4% of participants wear a watch regularly — while 63.5% struggle with fragmented apps and 58.5% lose focus.
+
+That made us think: why not bring AI capabilities onto a digital watch itself?
+Because when you chat with normal AI tools, they have a fixed context window and don't truly remember your personal routine. So we decided to build a personalised AI OS — running the heavy intelligence on your phone, while displaying everything calmly on your wrist."
+
+======================================================================
+SLIDE 04 — THE IDEA: WRISTOS REVEAL (~20s)
+Speaker: Gaurav Mathpal (Team Leader)
+======================================================================
+"And that is where our idea was born:
+WRISTOS — Your Personal Intelligence, On Your Wrist.
+
+The phone acts as the intelligence centre handling Gemini AI, voice, and memory; the watch stays distraction-free and glanceable. Now Ashish will take over to walk through the market opportunity and positioning."
+
+======================================================================
+SLIDE 05 — MARKET VALUE & USER DEMAND (~40s)
+Speaker: Ashish Sanjay Hatwal
+======================================================================
+"Thank you, Gaurav.
+Looking at the numbers, WristOS sits right at the intersection of three massive, fast-growing global markets:
+First, the global smartwatch market stands at 108.31 billion dollars in 2025 and is projected to nearly double to 200.57 billion by 2030.
+Second, productivity software is expanding from 74.94 billion to 147.05 billion dollars by 2030.
+And third, dedicated time-tracking and focus software is growing from 6.1 billion to 17.3 billion dollars by 2033 — almost 3x growth.
+
+Combined with strong user demand — 75% wanting a personal AI assistant, 73% wanting smart reminders, and 70% wanting personal memory — the market is clearly ready for a productivity-first wearable ecosystem."
+
+======================================================================
+SLIDE 06 — WHY WRISTOS & WHO IT SERVES (~30s)
+Speaker: Ashish Sanjay Hatwal
+======================================================================
+"And here is why WristOS stands out.
+We are not building another generic fitness band — our real strength is continuity between personal context and quick wearable action.
+It stands on four pillars: three-second glanceable clarity without unlocking your phone, persistent daily context, user-controlled permissioned AI memory, and open software-first hardware.
+
+That creates clear daily value across three groups: students managing deadlines and focus blocks, working professionals cutting down constant phone checks, and freelancers juggling multiple client routines. Over to Daksh to walk through our Watch OS and all the features we built."
+
+======================================================================
+SLIDE 07 — LATEST PINETIME WATCH OS & EVERYDAY WATCH FEATURES (~30s)
+Speaker: Daksh Jain
+======================================================================
+"Thanks, Ashish.
+On the watch side, we built WristOS on top of InfiniTime for the PINE64 PineTime — powered by an nRF52832 processor and a 240x240 display using FreeRTOS and LVGL 7.
+
+First, WristOS includes every essential feature you expect from a modern smartwatch: custom watch faces plus an Always-On Display mode, a 3x2 app launcher, live optical heart rate with an ECG waveform, 7-day step tracking, weather updates, music playback remote, smart phone notifications, stopwatch, countdown timer, alarms, guided breathing, flashlight, and quick settings — all wrapped in our OLED-dark violet design."
+
+======================================================================
+SLIDE 08 — POMODORO FOCUS & PRIORITY TASKS (~25s)
+Speaker: Daksh Jain
+======================================================================
+"On top of those everyday smartwatch basics, we layered dedicated productivity tools.
+Look at our Pomodoro Focus Timer — tapped straight into that 6.1-to-17.3 billion dollar time-tracking trend hugely popular among new-age students.
+You start a 25-minute deep-work session right on your watch, get silent vibration cues when it finishes, and check off priority tasks synced from your companion app — alongside hydration and habit tracking — without touching your phone."
+
+======================================================================
+SLIDE 09 — PERSONALISED GEMINI AI & KNOWLEDGE VAULT (~25s)
+Speaker: Daksh Jain
+======================================================================
+"And here is what truly sets WristOS apart from a normal smartwatch: our personalised Gemini AI Assistant and Knowledge Vault.
+Unlike standard chatbots with a short context window, WristOS remembers your context with user permission. Tap the breathing AI orb on the watch or phone, speak naturally to get a smart daily briefing, create tasks, save tagged notes under #Work, #Health, or #Routine, or even trigger Find My Phone.
+Now Dhruv and Atharv will briefly cover our web portal, mobile app, and Bluetooth bridge."
+
+======================================================================
+SLIDE 10 — WEB PORTAL, MOBILE APP & NIMBLE (~25s)
+Speaker: Dhruv Singh Bhandari (~10s) & Atharv Santosh Gaikwad (~15s)
+======================================================================
+[Dhruv (~10s)]:
+"Thanks, Daksh. We built a React 19 web portal with 8 companion modules and packaged our mobile app as WristOS-Mobile-App-v1.0.apk."
+
+[Atharv (~15s)]:
+"And everything syncs with the PineTime over standard NimBLE GATT services — streaming heart rate, steps, and battery from the watch while pushing time, smart alerts, and haptic triggers from the phone. Now Arjun and Ravikant will share our safety checks and status."
+
+======================================================================
+SLIDE 11 — SEALED HARDWARE SAFETY & DELIVERABLES (~20s)
+Speaker: Arjun Sharma (~10s) & Ravikant Kushwah (~10s)
+======================================================================
+[Arjun (~10s)]:
+"Since the physical PineTime is factory-sealed with no exposed debug pins, every firmware change is verified in our InfiniSim simulator before any physical flash."
+
+[Ravikant (~10s)]:
+"Our custom firmware DFU zip, simulator, web portal, Android APK, and NimBLE GATT layer are all built and ready. Back to Gaurav to conclude."
+
+======================================================================
+SLIDE 12 — CONCLUSION & LIVE Q&A LOOP (~20s)
+Speaker: Gaurav Mathpal (Team Leader)
+======================================================================
+"To bring it back to where we started: productivity shouldn't mean unlocking your phone fifty times a day.
+WristOS combines every essential smartwatch capability with your own personalised AI — capture once on your phone, keep full control of your memory, and act at a glance on your wrist.
+And your personal data remains safe — stored on our own encrypted server architecture and powered by Google Gemini AI, so security and privacy always stay intact.
+Thank you everyone — we are open for your questions."
