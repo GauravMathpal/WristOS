@@ -10,6 +10,8 @@ import com.wristos.app.data.local.memory.MemoryDao
 import com.wristos.app.data.local.memory.MemoryEntity
 import com.wristos.app.data.local.task.TaskDao
 import com.wristos.app.data.local.task.TaskEntity
+import com.wristos.app.data.local.wellness.DailyActivityDao
+import com.wristos.app.data.local.wellness.DailyActivityEntity
 import com.wristos.app.data.local.wellness.FocusSessionDao
 import com.wristos.app.data.local.wellness.FocusSessionEntity
 import com.wristos.app.data.local.wellness.HabitDao
@@ -23,9 +25,10 @@ import com.wristos.app.data.local.wellness.HydrationEntity
         MemoryEntity::class,
         HabitEntity::class,
         HydrationEntity::class,
-        FocusSessionEntity::class
+        FocusSessionEntity::class,
+        DailyActivityEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class WristOSDatabase : RoomDatabase() {
@@ -34,6 +37,7 @@ abstract class WristOSDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun hydrationDao(): HydrationDao
     abstract fun focusSessionDao(): FocusSessionDao
+    abstract fun dailyActivityDao(): DailyActivityDao
 
     companion object {
         @Volatile
@@ -84,6 +88,24 @@ abstract class WristOSDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS daily_activity (
+                        date TEXT PRIMARY KEY NOT NULL,
+                        steps INTEGER NOT NULL DEFAULT 0,
+                        lastHeartRate INTEGER NOT NULL DEFAULT 0,
+                        lastSyncedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                // Remove synthetic pre-seeded fake defaults introduced in v3
+                db.execSQL("DELETE FROM hydration_logs WHERE amountMl = 1250")
+                db.execSQL("UPDATE habits SET streakCount = 0 WHERE lastCompletedDate = '' AND streakCount IN (2, 3, 4, 5)")
+            }
+        }
+
         fun getDatabase(context: Context): WristOSDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -91,7 +113,7 @@ abstract class WristOSDatabase : RoomDatabase() {
                     WristOSDatabase::class.java,
                     "wristos_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance

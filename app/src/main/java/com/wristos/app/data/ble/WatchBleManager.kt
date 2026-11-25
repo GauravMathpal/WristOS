@@ -401,12 +401,7 @@ class WatchBleManager(private val context: Context) {
     fun startScan(preserveReconnectCount: Boolean = false) {
         val scanner = bluetoothAdapter?.bluetoothLeScanner
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            // Only simulate if there's no Bluetooth hardware (e.g. Android Emulator)
-            if (bluetoothAdapter == null) {
-                simulateWatchConnection()
-            } else {
-                _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
-            }
+            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
             return
         }
 
@@ -416,7 +411,7 @@ class WatchBleManager(private val context: Context) {
         }
 
         if (scanner == null) {
-            simulateWatchConnection()
+            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.DISCONNECTED)
             return
         }
 
@@ -870,21 +865,6 @@ class WatchBleManager(private val context: Context) {
             val msgBytes = (if (message.isNotEmpty()) message else title).toByteArray(Charsets.UTF_8).take(64).toByteArray()
             val payload = byteArrayOf(0x05, 0x01, 0x00) + titleBytes + byteArrayOf(0x00) + msgBytes
             writeCharacteristicCompat(gatt, char, payload)
-        }
-    }
-
-    private fun simulateWatchConnection() {
-        scope.launch {
-            _watchData.value = _watchData.value.copy(connectionState = WatchConnectionState.CONNECTING)
-            delay(800)
-            _watchData.value = WatchData(
-                deviceName = "PineTime (Simulated)",
-                connectionState = WatchConnectionState.CONNECTED,
-                heartRate = 74,
-                stepCount = 6840,
-                batteryLevel = 88,
-                lastSyncTime = System.currentTimeMillis()
-            )
         }
     }
 

@@ -52,3 +52,18 @@ interface FocusSessionDao {
     @Delete
     suspend fun deleteSession(session: FocusSessionEntity)
 }
+
+@Dao
+interface DailyActivityDao {
+    @Query("SELECT * FROM daily_activity WHERE date = :date LIMIT 1")
+    fun observeForDate(date: String): Flow<DailyActivityEntity?>
+
+    @Query("SELECT * FROM daily_activity WHERE date = :date LIMIT 1")
+    suspend fun getForDate(date: String): DailyActivityEntity?
+
+    @Query("SELECT * FROM daily_activity ORDER BY date DESC LIMIT 7")
+    fun observeRecent(): Flow<List<DailyActivityEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: DailyActivityEntity)
+}

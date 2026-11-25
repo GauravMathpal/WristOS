@@ -75,6 +75,7 @@ fun DashboardScreen(
     val memoriesCount by viewModel.memoriesCount.collectAsState()
     val habits by viewModel.habits.collectAsState()
     val hydration by viewModel.todayHydration.collectAsState()
+    val todayActivity by viewModel.todayActivity.collectAsState()
     val focusSessions by viewModel.focusSessions.collectAsState()
     val briefing by viewModel.briefing.collectAsState()
     val isBriefingLoading by viewModel.isBriefingLoading.collectAsState()
@@ -140,12 +141,13 @@ fun DashboardScreen(
     val pendingList = remember(tasks) { tasks.filter { !it.isCompleted }.take(3) }
     val completionPct = if (tasks.isNotEmpty()) ((completedTasksCount.toFloat() / tasks.size) * 100).toInt() else 0
 
-    val steps = if (isConnected) watchData.stepCount else 0
+    val steps = if (isConnected) watchData.stepCount else (todayActivity?.steps ?: 0)
+    val liveHeartRate = if (isConnected) watchData.heartRate else 0
     val stepProgress = (steps.toFloat() / dailyGoal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val calories = (steps * 0.04f).toInt()
     val distanceKm = String.format(Locale.getDefault(), "%.1f", steps * 0.00075f)
 
-    val waterMl = hydration?.amountMl ?: 1250
+    val waterMl = hydration?.amountMl ?: 0
     val waterGoal = hydration?.goalMl ?: 2500
     val waterPct = ((waterMl.toFloat() / waterGoal.coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100)
     val totalFocusMins = focusSessions.sumOf { it.durationMinutes }
@@ -591,7 +593,7 @@ fun DashboardScreen(
                                 drawArc(
                                     brush = Brush.horizontalGradient(listOf(Color(0xFF38BDF8), palette.gradStart, palette.gradEnd)),
                                     startAngle = 180f,
-                                    sweepAngle = 180f * stepProgress.coerceAtLeast(0.04f),
+                                    sweepAngle = if (stepProgress > 0f) 180f * stepProgress.coerceAtLeast(0.04f) else 0f,
                                     useCenter = false,
                                     style = Stroke(width = sw, cap = StrokeCap.Round),
                                     size = arcSize
@@ -599,7 +601,7 @@ fun DashboardScreen(
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
                                 Text(
-                                    text = if (isConnected) "%,d".format(steps) else "0",
+                                    text = "%,d".format(steps),
                                     fontSize = 22.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Black,
@@ -622,7 +624,7 @@ fun DashboardScreen(
                             BiometricMiniRow(
                                 icon = Icons.Default.Favorite,
                                 label = "Heart Rate",
-                                value = if (isConnected && watchData.heartRate > 0) "${watchData.heartRate} bpm" else "-- bpm",
+                                value = if (liveHeartRate > 0) "$liveHeartRate bpm" else "-- bpm",
                                 accent = Color(0xFFF43F5E)
                             )
                             BiometricMiniRow(

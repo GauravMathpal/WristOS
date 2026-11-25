@@ -4,11 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wristos.app.data.ble.BleManagerProvider
+import com.wristos.app.data.ble.WatchConnectionState
 import com.wristos.app.data.ble.WatchData
 import com.wristos.app.data.local.SettingsPreferences
 import com.wristos.app.data.local.WristOSDatabase
 import com.wristos.app.data.local.memory.MemoryEntity
 import com.wristos.app.data.local.task.TaskEntity
+import com.wristos.app.data.local.wellness.DailyActivityEntity
 import com.wristos.app.data.local.wellness.FocusSessionEntity
 import com.wristos.app.data.local.wellness.HabitEntity
 import com.wristos.app.data.local.wellness.HydrationEntity
@@ -61,6 +63,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val todayHydration: StateFlow<HydrationEntity?> = database.hydrationDao().observeForDate(todayKey)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val todayActivity: StateFlow<DailyActivityEntity?> = database.dailyActivityDao().observeForDate(todayKey)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val focusSessions: StateFlow<List<FocusSessionEntity>> = database.focusSessionDao().getAllSessions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -75,15 +80,34 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             if (database.habitDao().getHabitCount() == 0) {
                 database.habitDao().insertHabits(
                     listOf(
-                        HabitEntity(title = "Drink 2.5L Water", category = "Health", streakCount = 3),
-                        HabitEntity(title = "Morning Walk (20m)", category = "Health", streakCount = 5),
-                        HabitEntity(title = "Read 20 mins", category = "Study", streakCount = 2),
-                        HabitEntity(title = "Mindfulness & Breath", category = "Wellness", streakCount = 4)
+                        HabitEntity(title = "Drink 2.5L Water", category = "Health", streakCount = 0),
+                        HabitEntity(title = "Morning Walk (20m)", category = "Health", streakCount = 0),
+                        HabitEntity(title = "Read 20 mins", category = "Study", streakCount = 0),
+                        HabitEntity(title = "Mindfulness & Breath", category = "Wellness", streakCount = 0)
                     )
                 )
             }
-            if (database.hydrationDao().getForDate(todayKey) == null) {
-                database.hydrationDao().upsert(HydrationEntity(date = todayKey, amountMl = 1250, goalMl = 2500))
+        }
+
+        // Persist real BLE telemetry updates (never synthetic data) for today's activity log
+        viewModelScope.launch {
+            watchData.collect { data ->
+                if (data.connectionState == WatchConnectionState.CONNECTED && data.lastSyncTime > 0L) {
+                    val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                    val existing = database.dailyActivityDao().getForDate(dateKey)
+                    val newSteps = if (data.stepCount > 0) data.stepCount else (existing?.steps ?: 0)
+                    val newHr = if (data.heartRate > 0) data.heartRate else (existing?.lastHeartRate ?: 0)
+                    if (newSteps != (existing?.steps ?: -1) || newHr != (existing?.lastHeartRate ?: -1)) {
+                        database.dailyActivityDao().upsert(
+                            DailyActivityEntity(
+                                date = dateKey,
+                                steps = newSteps,
+                                lastHeartRate = newHr,
+                                lastSyncedAt = data.lastSyncTime
+                            )
+                        )
+                    }
+                }
             }
         }
     }

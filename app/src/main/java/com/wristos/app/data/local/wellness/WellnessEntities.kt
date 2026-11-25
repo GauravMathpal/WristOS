@@ -32,3 +32,12 @@ data class FocusSessionEntity(
     val durationMinutes: Int,
     val completedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "daily_activity")
+data class DailyActivityEntity(
+    @PrimaryKey
+    val date: String,
+    val steps: Int = 0,
+    val lastHeartRate: Int = 0,
+    val lastSyncedAt: Long = 0L
+)

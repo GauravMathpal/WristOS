@@ -3,7 +3,6 @@ import {
   TaskRecord, 
   MemoryRecord, 
   FocusSessionRecord, 
-  ActivityRecord,
   HabitRecord,
   HydrationRecord,
   MedicationRecord,
@@ -146,44 +145,10 @@ export async function seedInitialDataIfEmpty() {
     await db.focusSessions.bulkAdd(initialFocus)
   }
 
-  // 4. Seed Activity Logs (Past 7 Days matching reference UI)
-  const activityCount = await db.activityLogs.count()
-  if (activityCount === 0) {
-    const dayOffsets = [
-      { offset: 6, steps: 4500, hr: 74 },
-      { offset: 5, steps: 6500, hr: 76 },
-      { offset: 4, steps: 5000, hr: 72 },
-      { offset: 3, steps: 8500, hr: 80 },
-      { offset: 2, steps: 9500, hr: 82 },
-      { offset: 1, steps: 6000, hr: 75 },
-      { offset: 0, steps: 0, hr: 0 } // Today starts at 0 until live watch telemetry syncs
-    ]
-
-    const initialActivities: ActivityRecord[] = dayOffsets.map(({ offset, steps, hr }) => {
-      const d = new Date(now - offset * 86400000)
-      const dateStr = d.toISOString().split('T')[0]
-      return {
-        id: `act-${dateStr}`,
-        date: dateStr,
-        steps,
-        stepGoal: 10000,
-        heartRateAvg: hr,
-        calories: Math.round(steps * 0.04),
-        distanceKm: parseFloat((steps * 0.00075).toFixed(1)),
-        activeMinutes: Math.round(steps / 160),
-        createdAt: now - offset * 86400000,
-        updatedAt: now - offset * 86400000,
-        deletedAt: null,
-        syncStatus: 'pending'
-      }
-    })
-
-    await db.activityLogs.bulkAdd(initialActivities)
-  }
-
+  // 4. Activity Logs start empty and are populated strictly from real watch telemetry
   const todayStr = new Date().toISOString().split('T')[0]
 
-  // 5. Seed Habits
+  // 5. Seed Habits (starting at 0 streak until completed)
   const habitCount = await db.habits.count()
   if (habitCount === 0) {
     const initialHabits: HabitRecord[] = [
@@ -192,9 +157,9 @@ export async function seedInitialDataIfEmpty() {
         title: 'Morning Hydration (500ml)',
         category: 'Health',
         targetDaysPerWeek: 7,
-        streakCount: 6,
-        completedDates: [todayStr],
-        createdAt: now - 86400000 * 6,
+        streakCount: 0,
+        completedDates: [],
+        createdAt: now,
         updatedAt: now,
         deletedAt: null,
         syncStatus: 'pending'
@@ -204,9 +169,9 @@ export async function seedInitialDataIfEmpty() {
         title: 'Daily 10,000 Steps Goal',
         category: 'Health',
         targetDaysPerWeek: 7,
-        streakCount: 5,
+        streakCount: 0,
         completedDates: [],
-        createdAt: now - 86400000 * 5,
+        createdAt: now,
         updatedAt: now,
         deletedAt: null,
         syncStatus: 'pending'
@@ -216,9 +181,9 @@ export async function seedInitialDataIfEmpty() {
         title: '30 Mins Deep Technical Reading',
         category: 'Mindset',
         targetDaysPerWeek: 5,
-        streakCount: 3,
+        streakCount: 0,
         completedDates: [],
-        createdAt: now - 86400000 * 3,
+        createdAt: now,
         updatedAt: now,
         deletedAt: null,
         syncStatus: 'pending'
@@ -228,9 +193,9 @@ export async function seedInitialDataIfEmpty() {
         title: 'Evening Device Disconnect (10 PM)',
         category: 'Routine',
         targetDaysPerWeek: 7,
-        streakCount: 2,
+        streakCount: 0,
         completedDates: [],
-        createdAt: now - 86400000 * 2,
+        createdAt: now,
         updatedAt: now,
         deletedAt: null,
         syncStatus: 'pending'
@@ -239,20 +204,16 @@ export async function seedInitialDataIfEmpty() {
     await db.habits.bulkAdd(initialHabits)
   }
 
-  // 6. Seed Hydration Logs
+  // 6. Seed Hydration Logs (starts at 0ml until user logs intake)
   const hydrationCount = await db.hydrationLogs.count()
   if (hydrationCount === 0) {
     const initialHydration: HydrationRecord = {
       id: `hydro-${todayStr}`,
       date: todayStr,
-      amountMl: 1500,
+      amountMl: 0,
       goalMl: 2500,
-      logs: [
-        { id: 'hl-1', time: '08:30 AM', amountMl: 500 },
-        { id: 'hl-2', time: '11:15 AM', amountMl: 500 },
-        { id: 'hl-3', time: '02:30 PM', amountMl: 500 }
-      ],
-      createdAt: now - 18000000,
+      logs: [],
+      createdAt: now,
       updatedAt: now,
       deletedAt: null,
       syncStatus: 'pending'

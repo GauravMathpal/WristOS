@@ -176,7 +176,7 @@ export function DashboardScreen() {
       : (todayActivity?.steps ?? 0)
     const activeHr = watch.heartRate > 0 
       ? watch.heartRate 
-      : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
+      : (todayActivity?.heartRateAvg ?? 0)
 
     const result = await syncService.getDailyBriefing({
       tasks: activeTasks.map(t => ({ title: t.title, dueTime: t.dueTime, priority: t.priority, isCompleted: t.isCompleted })),
@@ -184,7 +184,7 @@ export function DashboardScreen() {
       activity: {
         steps: activeSteps,
         stepGoal: currentUser?.dailyStepGoal || 10000,
-        heartRateAvg: activeHr > 0 ? activeHr : 72
+        heartRateAvg: activeHr
       },
       focusMinutes: totalFocusMins
     })
@@ -218,7 +218,7 @@ export function DashboardScreen() {
     : (todayActivity?.steps ?? 0)
   const displayHeartRate = watch.heartRate > 0 
     ? watch.heartRate 
-    : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
+    : (todayActivity?.heartRateAvg ?? 0)
   const displayCalories = Math.round(displaySteps * 0.04) || 0
   const displayDistance = (displaySteps * 0.00075).toFixed(1) || '0.0'
   const displayBattery = watch.batteryLevel > 0 ? watch.batteryLevel : 100
@@ -234,7 +234,7 @@ export function DashboardScreen() {
   const totalFocusMinutes = todayFocusSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0)
 
   // Hydration statistics
-  const currentWaterMl = hydration?.amountMl ?? 1500
+  const currentWaterMl = hydration?.amountMl ?? 0
   const goalWaterMl = hydration?.goalMl ?? 2500
   const hydrationPercent = Math.min(100, Math.round((currentWaterMl / goalWaterMl) * 100))
 
@@ -519,7 +519,7 @@ export function DashboardScreen() {
                     <Heart className="w-4 h-4 text-rose-400 fill-rose-400 animate-pulse" />
                   </div>
                   <span className="text-xs sm:text-sm font-bold text-white font-mono">
-                    {displayHeartRate} bpm
+                    {displayHeartRate > 0 ? `${displayHeartRate} bpm` : '-- bpm'}
                   </span>
                 </div>
 

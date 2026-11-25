@@ -46,6 +46,7 @@ fun HealthScreen(
     val dailyGoal by viewModel.prefs.dailyStepGoal.collectAsState()
     val habits by viewModel.habits.collectAsState()
     val hydration by viewModel.todayHydration.collectAsState()
+    val todayActivity by viewModel.todayActivity.collectAsState()
     val palette = LocalWristOSPalette.current
 
     val isConnected = watchData.connectionState == WatchConnectionState.CONNECTED
@@ -62,13 +63,14 @@ fun HealthScreen(
         }
     }
 
-    val steps = if (isConnected) watchData.stepCount else 0
+    val steps = if (isConnected) watchData.stepCount else (todayActivity?.steps ?: 0)
+    val hasSyncedToday = isConnected || (todayActivity?.lastSyncedAt ?: 0L) > 0L
     val stepProgress = (steps.toFloat() / dailyGoal.coerceAtLeast(1)).coerceIn(0f, 1f)
     val calories = (steps * 0.04f).toInt()
     val distanceKm = String.format(Locale.getDefault(), "%.1f", steps * 0.00075f)
     val hr = if (isConnected && watchData.heartRate > 0) watchData.heartRate else 0
 
-    val waterMl = hydration?.amountMl ?: 1250
+    val waterMl = hydration?.amountMl ?: 0
     val waterGoal = hydration?.goalMl ?: 2500
     val waterPct = ((waterMl.toFloat() / waterGoal.coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100)
 
@@ -182,7 +184,7 @@ fun HealthScreen(
                                 drawArc(
                                     brush = Brush.sweepGradient(listOf(Color(0xFF38BDF8), palette.gradStart, palette.gradEnd, Color(0xFF38BDF8))),
                                     startAngle = -90f,
-                                    sweepAngle = 360f * stepProgress.coerceAtLeast(0.03f),
+                                    sweepAngle = if (stepProgress > 0f) 360f * stepProgress.coerceAtLeast(0.03f) else 0f,
                                     useCenter = false,
                                     style = Stroke(width = sw, cap = StrokeCap.Round),
                                     size = Size(size.width, size.height)
@@ -190,7 +192,7 @@ fun HealthScreen(
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = if (isConnected) "%,d".format(steps) else "--",
+                                    text = if (hasSyncedToday) "%,d".format(steps) else "--",
                                     fontSize = 28.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Black,
@@ -211,8 +213,8 @@ fun HealthScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             HealthStatTile("Heart Rate", if (hr > 0) "$hr BPM" else "-- BPM", Icons.Default.Favorite, Color(0xFFF43F5E), Modifier.weight(1f))
-                            HealthStatTile("Burn", if (isConnected) "$calories kcal" else "--", Icons.Default.LocalFireDepartment, AmberAlert, Modifier.weight(1f))
-                            HealthStatTile("Distance", if (isConnected) "$distanceKm km" else "--", Icons.Default.Map, Color(0xFF38BDF8), Modifier.weight(1f))
+                            HealthStatTile("Burn", if (hasSyncedToday) "$calories kcal" else "--", Icons.Default.LocalFireDepartment, AmberAlert, Modifier.weight(1f))
+                            HealthStatTile("Distance", if (hasSyncedToday) "$distanceKm km" else "--", Icons.Default.Map, Color(0xFF38BDF8), Modifier.weight(1f))
                         }
                     }
                 }

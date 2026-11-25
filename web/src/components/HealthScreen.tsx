@@ -60,12 +60,12 @@ export function HealthScreen() {
   const hydration = useLiveQuery(() => db.hydrationLogs.where('date').equals(todayStr).first(), [todayStr])
   const medications = useLiveQuery(() => db.medications.filter(m => !m.deletedAt).toArray(), []) || []
 
-  const displaySteps = watch.stepCount > 0 
-    ? watch.stepCount 
+  const displaySteps = isConnected && watch.stepCount > 0
+    ? watch.stepCount
     : (todayActivity?.steps ?? 0)
-  const displayHeartRate = watch.heartRate > 0 
-    ? watch.heartRate 
-    : (todayActivity?.heartRateAvg ?? (isConnected ? 0 : 72))
+  const displayHeartRate = isConnected && watch.heartRate > 0
+    ? watch.heartRate
+    : (todayActivity?.heartRateAvg ?? 0)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -90,16 +90,16 @@ export function HealthScreen() {
     }
   }
 
-  // Auto-record today's biometrics to Dexie
+  // Auto-record today's biometrics to Dexie only when live connected telemetry is present
   useEffect(() => {
-    if (displaySteps > 0 || displayHeartRate > 0) {
+    if (isConnected && !isSimulated && (watch.stepCount > 0 || watch.heartRate > 0)) {
       activityRepository.recordDailyMetrics({
-        steps: displaySteps,
+        steps: watch.stepCount,
         stepGoal: stepGoal,
-        heartRateAvg: displayHeartRate
+        heartRateAvg: watch.heartRate
       })
     }
-  }, [displaySteps, displayHeartRate, stepGoal])
+  }, [isConnected, isSimulated, watch.stepCount, watch.heartRate, stepGoal])
 
   // Map weekly logs into the bar chart
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -167,7 +167,7 @@ export function HealthScreen() {
     showToast("Medication reminder added")
   }
 
-  const currentWaterMl = hydration?.amountMl ?? 1500
+  const currentWaterMl = hydration?.amountMl ?? 0
   const goalWaterMl = hydration?.goalMl ?? 2500
   const hydrationPercent = Math.min(100, Math.round((currentWaterMl / goalWaterMl) * 100))
 
@@ -342,7 +342,7 @@ export function HealthScreen() {
                     <span>Heart Rate</span>
                   </span>
                   <span className="text-lg font-black font-mono text-white">
-                    {displayHeartRate} <span className="text-[10px] text-pink-300 font-sans">BPM</span>
+                    {displayHeartRate > 0 ? displayHeartRate : '--'} <span className="text-[10px] text-pink-300 font-sans">BPM</span>
                   </span>
                 </div>
 
@@ -361,35 +361,51 @@ export function HealthScreen() {
               </div>
             </div>
 
-            {/* Monthly Statistics Summary */}
-            <div className="p-5 rounded-3xl bg-[#161224] border border-white/[0.08] shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-amber-400" />
-                  <span>30-Day Activity Summary</span>
-                </span>
-                <span className="text-[10px] font-mono text-emerald-400 font-bold">+12% vs last month</span>
-              </div>
+            {/* Synced Statistics Summary (computed strictly from real logged telemetry) */}
+            {(() => {
+              const hasLogs = weeklyLogs.length > 0
+              const loggedTotalSteps = hasLogs
+                ? weeklyLogs.reduce((sum, l) => sum + (l.steps || 0), 0)
+                : displaySteps
+              const totalDist = (loggedTotalSteps * 0.00075).toFixed(1)
+              const totalCal = Math.round(loggedTotalSteps * 0.04).toLocaleString()
+              const dailyAvg = hasLogs
+                ? Math.round(loggedTotalSteps / weeklyLogs.length).toLocaleString()
+                : displaySteps.toLocaleString()
+              const activeHrs = ((loggedTotalSteps / 160) / 60).toFixed(1)
+              return (
+                <div className="p-5 rounded-3xl bg-[#161224] border border-white/[0.08] shadow-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-amber-400" />
+                      <span>Activity Summary</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-purple-300 font-bold">
+                      {hasLogs ? `${weeklyLogs.length}d synced` : (isConnected ? 'Live watch' : 'No logs yet')}
+                    </span>
+                  </div>
 
-              <div className="grid grid-cols-4 gap-2 pt-1 text-center">
-                <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
-                  <span className="text-[9px] text-slate-400 font-mono">Total Dist</span>
-                  <p className="text-xs font-black text-white font-mono mt-0.5">142.6 km</p>
+                  <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+                    <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
+                      <span className="text-[9px] text-slate-400 font-mono">Total Dist</span>
+                      <p className="text-xs font-black text-white font-mono mt-0.5">{totalDist} km</p>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
+                      <span className="text-[9px] text-slate-400 font-mono">Calories</span>
+                      <p className="text-xs font-black text-white font-mono mt-0.5">{totalCal} kcal</p>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
+                      <span className="text-[9px] text-slate-400 font-mono">Daily Avg</span>
+                      <p className="text-xs font-black text-white font-mono mt-0.5">{dailyAvg} st</p>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
+                      <span className="text-[9px] text-slate-400 font-mono">Active Hrs</span>
+                      <p className="text-xs font-black text-white font-mono mt-0.5">{activeHrs} h</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
-                  <span className="text-[9px] text-slate-400 font-mono">Calories</span>
-                  <p className="text-xs font-black text-white font-mono mt-0.5">8,420 kcal</p>
-                </div>
-                <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
-                  <span className="text-[9px] text-slate-400 font-mono">Daily Avg</span>
-                  <p className="text-xs font-black text-white font-mono mt-0.5">8,240 st</p>
-                </div>
-                <div className="p-2.5 rounded-2xl bg-[#0f0b1a] border border-white/[0.04]">
-                  <span className="text-[9px] text-slate-400 font-mono">Active Hrs</span>
-                  <p className="text-xs font-black text-white font-mono mt-0.5">28.4 h</p>
-                </div>
-              </div>
-            </div>
+              )
+            })()}
           </motion.div>
         )}
 
@@ -426,7 +442,9 @@ export function HealthScreen() {
             <div className="p-5 rounded-3xl bg-[#161224] border border-white/[0.08] shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-white tracking-tight">Weekly Activity Performance</h3>
-                <span className="text-xs font-mono font-bold text-pink-400">7-Day Consistency: 86%</span>
+                <span className="text-xs font-mono font-bold text-pink-400">
+                  Today: {Math.min(100, Math.round((displaySteps / stepGoal) * 100))}% of goal
+                </span>
               </div>
 
               <div className="flex items-end justify-between gap-2 h-36 pt-4 pb-1">
@@ -490,79 +508,58 @@ export function HealthScreen() {
 
               <div>
                 <h3 className="text-4xl font-black text-white font-mono">
-                  {displayHeartRate} <span className="text-xs font-sans text-pink-300 font-bold">BPM</span>
+                  {displayHeartRate > 0 ? displayHeartRate : '--'} <span className="text-xs font-sans text-pink-300 font-bold">BPM</span>
                 </h3>
                 <p className="text-xs text-purple-200/80 mt-1">
                   Continuous Bluetooth GATT Heart Rate (0x180D)
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5 pt-2 max-w-xs mx-auto">
-                <div className="p-2.5 rounded-xl bg-[#0f0b1a] border border-white/[0.06]">
-                  <span className="text-[9px] font-mono text-slate-400">Resting</span>
-                  <p className="text-sm font-bold font-mono text-white">64 BPM</p>
-                </div>
+              <div className="grid grid-cols-2 gap-2.5 pt-2 max-w-xs mx-auto">
                 <div className="p-2.5 rounded-xl bg-[#0f0b1a] border border-pink-500/30">
                   <span className="text-[9px] font-mono text-pink-400">Current</span>
-                  <p className="text-sm font-bold font-mono text-white">{displayHeartRate} BPM</p>
+                  <p className="text-sm font-bold font-mono text-white">{displayHeartRate > 0 ? `${displayHeartRate} BPM` : '-- BPM'}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[#0f0b1a] border border-white/[0.06]">
-                  <span className="text-[9px] font-mono text-slate-400">Peak</span>
-                  <p className="text-sm font-bold font-mono text-white">118 BPM</p>
+                  <span className="text-[9px] font-mono text-slate-400">Active Zone</span>
+                  <p className="text-sm font-bold font-mono text-white">
+                    {displayHeartRate <= 0 ? 'Standby' : displayHeartRate < 60 ? 'Rest' : displayHeartRate < 100 ? 'Fat Burn' : displayHeartRate < 140 ? 'Aerobic' : 'Peak'}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Heart Rate Zones Breakdown */}
+            {/* Heart Rate Zones Guide */}
             <div className="p-5 rounded-3xl bg-[#161224] border border-white/[0.08] shadow-xl space-y-3">
               <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Heart Rate Training Zones</span>
+                <span>Heart Rate Zone Status</span>
               </h3>
 
               <div className="space-y-2.5 pt-1 text-xs">
-                {/* Zone 1: Rest */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300 font-medium">Zone 1: Rest (&lt; 60 BPM)</span>
-                    <span className="font-mono text-slate-400">12% of day</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-[#0f0b1a] overflow-hidden">
-                    <div className="w-[12%] h-full rounded-full bg-blue-400" />
-                  </div>
+                <div className="flex justify-between text-[11px] py-1.5 px-3 rounded-xl bg-[#0f0b1a] border border-white/[0.05]">
+                  <span className="text-slate-300 font-medium">Zone 1: Rest (&lt; 60 BPM)</span>
+                  <span className={`font-mono font-bold ${displayHeartRate > 0 && displayHeartRate < 60 ? 'text-blue-400' : 'text-slate-500'}`}>
+                    {displayHeartRate > 0 && displayHeartRate < 60 ? 'Active' : '—'}
+                  </span>
                 </div>
-
-                {/* Zone 2: Fat Burn */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300 font-medium">Zone 2: Fat Burn (60–100 BPM)</span>
-                    <span className="font-mono text-emerald-400 font-bold">68% of day (Optimal)</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-[#0f0b1a] overflow-hidden">
-                    <div className="w-[68%] h-full rounded-full bg-emerald-400" />
-                  </div>
+                <div className="flex justify-between text-[11px] py-1.5 px-3 rounded-xl bg-[#0f0b1a] border border-white/[0.05]">
+                  <span className="text-slate-300 font-medium">Zone 2: Fat Burn (60–100 BPM)</span>
+                  <span className={`font-mono font-bold ${displayHeartRate >= 60 && displayHeartRate < 100 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    {displayHeartRate >= 60 && displayHeartRate < 100 ? 'Active' : '—'}
+                  </span>
                 </div>
-
-                {/* Zone 3: Aerobic */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300 font-medium">Zone 3: Aerobic Cardio (100–140 BPM)</span>
-                    <span className="font-mono text-amber-400">16% of day</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-[#0f0b1a] overflow-hidden">
-                    <div className="w-[16%] h-full rounded-full bg-amber-400" />
-                  </div>
+                <div className="flex justify-between text-[11px] py-1.5 px-3 rounded-xl bg-[#0f0b1a] border border-white/[0.05]">
+                  <span className="text-slate-300 font-medium">Zone 3: Aerobic Cardio (100–140 BPM)</span>
+                  <span className={`font-mono font-bold ${displayHeartRate >= 100 && displayHeartRate < 140 ? 'text-amber-400' : 'text-slate-500'}`}>
+                    {displayHeartRate >= 100 && displayHeartRate < 140 ? 'Active' : '—'}
+                  </span>
                 </div>
-
-                {/* Zone 4: Peak */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300 font-medium">Zone 4: Peak (&gt; 140 BPM)</span>
-                    <span className="font-mono text-rose-400">4% of day</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-[#0f0b1a] overflow-hidden">
-                    <div className="w-[4%] h-full rounded-full bg-rose-500" />
-                  </div>
+                <div className="flex justify-between text-[11px] py-1.5 px-3 rounded-xl bg-[#0f0b1a] border border-white/[0.05]">
+                  <span className="text-slate-300 font-medium">Zone 4: Peak (&gt; 140 BPM)</span>
+                  <span className={`font-mono font-bold ${displayHeartRate >= 140 ? 'text-rose-400' : 'text-slate-500'}`}>
+                    {displayHeartRate >= 140 ? 'Active' : '—'}
+                  </span>
                 </div>
               </div>
             </div>
