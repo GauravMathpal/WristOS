@@ -29,6 +29,20 @@ android {
         }
         val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+
+        val webEnv = Properties()
+        val webEnvFile = rootProject.file("web/.env")
+        if (webEnvFile.exists()) {
+            webEnv.load(FileInputStream(webEnvFile))
+        }
+        val supabaseUrl = localProperties.getProperty("SUPABASE_URL")
+            ?: webEnv.getProperty("VITE_SUPABASE_URL")
+            ?: ""
+        val supabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY")
+            ?: webEnv.getProperty("VITE_SUPABASE_ANON_KEY")
+            ?: ""
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     buildTypes {

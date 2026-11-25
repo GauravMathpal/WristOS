@@ -4,10 +4,21 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.wristos.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class AssistantReply(
     val replyText: String,
     val action: AssistantAction = AssistantAction.None
+)
+
+data class CloudDailyBriefing(
+    val greeting: String,
+    val priorities: List<String>,
+    val healthInsight: String
 )
 
 class GeminiAssistantClient(
@@ -23,8 +34,11 @@ class GeminiAssistantClient(
         return custom.ifBlank { BuildConfig.GEMINI_API_KEY.trim() }
     }
 
+    private val hasSupabaseEdge: Boolean
+        get() = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_ANON_KEY.isNotBlank()
+
     val isConfigured: Boolean
-        get() = activeApiKey().isNotBlank()
+        get() = activeApiKey().isNotBlank() || hasSupabaseEdge
 
     private fun ensureModels(): Pair<GenerativeModel, GenerativeModel>? {
         val key = activeApiKey()
@@ -44,56 +58,171 @@ class GeminiAssistantClient(
         recentHistory: List<Pair<String, String>> = emptyList()
     ): Result<AssistantReply> = withContext(Dispatchers.IO) {
         val models = ensureModels()
-            ?: return@withContext Result.failure(
-                IllegalStateException("Gemini API key is not configured. Using offline Smart Engine.")
-            )
+        if (models != null) {
+            val promptBuilder = StringBuilder()
+            promptBuilder.append("You are WristOS, an intelligent personal assistant powering an Android smartphone and a PineTime smartwatch.\n")
+            promptBuilder.append("Keep your replies concise, friendly, and practical (1-2 sentences max).\n")
+            promptBuilder.append("STRICT ACTION DIRECTIVE:\n")
+            promptBuilder.append("- If the user states ANY task, to-do, deadline, or commitment (e.g., 'have to...', 'need to...', 'complete...', 'by tmr 5pm', 'remind me'), confirm concisely and ALWAYS append: [ACTION:TASK|Task Title|Due Time] at the very end.\n")
+            promptBuilder.append("- If the user wants to remember or store a fact, confirm concisely and ALWAYS append: [ACTION:MEMORY|Category|Fact to remember] at the very end.\n")
+            promptBuilder.append("- If the user wants to alert or buzz the watch, ALWAYS append: [ACTION:ALERT|Max 18 chars] at the very end.\n")
+            promptBuilder.append("If no action is needed, do not include any ACTION tag.\n\n")
 
-        val promptBuilder = StringBuilder()
-        promptBuilder.append("You are WristOS, an intelligent personal assistant powering an Android smartphone and a PineTime smartwatch.\n")
-        promptBuilder.append("Keep your replies concise, friendly, and practical (1-2 sentences max).\n")
-        promptBuilder.append("STRICT ACTION DIRECTIVE:\n")
-        promptBuilder.append("- If the user states ANY task, to-do, deadline, or commitment (e.g., 'have to...', 'need to...', 'complete...', 'by tmr 5pm', 'remind me'), confirm concisely and ALWAYS append: [ACTION:TASK|Task Title|Due Time] at the very end.\n")
-        promptBuilder.append("- If the user wants to remember or store a fact, confirm concisely and ALWAYS append: [ACTION:MEMORY|Category|Fact to remember] at the very end.\n")
-        promptBuilder.append("- If the user wants to alert or buzz the watch, ALWAYS append: [ACTION:ALERT|Max 18 chars] at the very end.\n")
-        promptBuilder.append("If no action is needed, do not include any ACTION tag.\n\n")
-
-        if (personalMemories.isNotEmpty()) {
-            promptBuilder.append("Known User Facts:\n")
-            personalMemories.take(6).forEach { fact ->
-                promptBuilder.append("• ").append(fact).append("\n")
+            if (personalMemories.isNotEmpty()) {
+                promptBuilder.append("Known User Facts:\n")
+                personalMemories.take(6).forEach { fact ->
+                    promptBuilder.append("• ").append(fact).append("\n")
+                }
+                promptBuilder.append("\n")
             }
-            promptBuilder.append("\n")
-        }
 
-        if (pendingTasks.isNotEmpty()) {
-            promptBuilder.append("User's Pending Tasks:\n")
-            pendingTasks.take(6).forEach { task ->
-                promptBuilder.append("• ").append(task).append("\n")
+            if (pendingTasks.isNotEmpty()) {
+                promptBuilder.append("User's Pending Tasks:\n")
+                pendingTasks.take(6).forEach { task ->
+                    promptBuilder.append("• ").append(task).append("\n")
+                }
+                promptBuilder.append("\n")
             }
-            promptBuilder.append("\n")
-        }
 
-        if (recentHistory.isNotEmpty()) {
-            promptBuilder.append("Recent Conversation:\n")
-            recentHistory.takeLast(6).forEach { (role, msg) ->
-                promptBuilder.append(role).append(": ").append(msg).append("\n")
+            if (recentHistory.isNotEmpty()) {
+                promptBuilder.append("Recent Conversation:\n")
+                recentHistory.takeLast(6).forEach { (role, msg) ->
+                    promptBuilder.append(role).append(": ").append(msg).append("\n")
+                }
+                promptBuilder.append("\n")
             }
-            promptBuilder.append("\n")
-        }
 
-        promptBuilder.append("User message: ").append(userPrompt)
-        val fullPrompt = promptBuilder.toString()
+            promptBuilder.append("User message: ").append(userPrompt)
+            val fullPrompt = promptBuilder.toString()
 
-        try {
-            val response = try {
-                models.first.generateContent(fullPrompt)
+            try {
+                val response = try {
+                    models.first.generateContent(fullPrompt)
+                } catch (_: Exception) {
+                    models.second.generateContent(fullPrompt)
+                }
+                val rawText = response.text?.trim()
+                if (!rawText.isNullOrBlank()) {
+                    return@withContext Result.success(parseAssistantReply(rawText, userPrompt))
+                }
             } catch (_: Exception) {
-                models.second.generateContent(fullPrompt)
+                // Fall through to Supabase Edge Function
             }
-            val rawText = response.text?.trim() ?: "I couldn't process that."
-            Result.success(parseAssistantReply(rawText, userPrompt))
-        } catch (e: Exception) {
-            Result.failure(e)
+        }
+
+        if (hasSupabaseEdge) {
+            val cloud = callSupabaseChat(userPrompt, personalMemories, pendingTasks)
+            if (cloud != null) {
+                return@withContext Result.success(cloud)
+            }
+        }
+
+        Result.failure(IllegalStateException("Cloud AI unreachable. Using offline Smart Engine."))
+    }
+
+    suspend fun generateDailyBriefing(
+        pendingTasks: List<Pair<String, String>>,
+        memories: List<Pair<String, String>>,
+        steps: Int,
+        stepGoal: Int,
+        heartRateAvg: Int,
+        focusMinutes: Int
+    ): CloudDailyBriefing? = withContext(Dispatchers.IO) {
+        if (!hasSupabaseEdge) return@withContext null
+        try {
+            val payload = JSONObject().apply {
+                put("tasks", JSONArray().apply {
+                    pendingTasks.take(5).forEach { (title, due) ->
+                        put(JSONObject().put("title", title).put("dueTime", due).put("isCompleted", false))
+                    }
+                })
+                put("memories", JSONArray().apply {
+                    memories.take(4).forEach { (tag, fact) ->
+                        put(JSONObject().put("tag", tag).put("fact", fact))
+                    }
+                })
+                put("activity", JSONObject().apply {
+                    put("steps", steps)
+                    put("stepGoal", stepGoal)
+                    put("heartRateAvg", heartRateAvg)
+                })
+                put("focusMinutes", focusMinutes)
+            }
+            val respText = postSupabaseEdge("gemini-briefing", payload.toString()) ?: return@withContext null
+            val json = JSONObject(respText)
+            val greeting = json.optString("greeting").trim()
+            val health = json.optString("healthInsight").trim()
+            val arr = json.optJSONArray("priorities")
+            val priorities = buildList {
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val item = arr.optString(i).trim()
+                        if (item.isNotBlank()) add(item)
+                    }
+                }
+            }
+            if (greeting.isNotBlank()) CloudDailyBriefing(greeting, priorities, health) else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun enrichPromptForSupabase(prompt: String): String {
+        val clean = prompt.trim()
+        return when {
+            hasTaskIntent(clean) ->
+                "[Action Request: The user is stating a task, commitment, or deadline. Extract the task title and due time, confirm concisely in 1 sentence, and append [ACTION:TASK|Task Title|Due Time] at the end]\nUser says: $clean"
+            hasMemoryIntent(clean) ->
+                "[Action Request: The user is stating a personal fact to remember. Extract category and fact, confirm concisely, and append [ACTION:MEMORY|Category|Fact] at the end]\nUser says: $clean"
+            hasAlertIntent(clean) ->
+                "[Action Request: The user wants to trigger a watch alert. Confirm and append [ACTION:ALERT|Max 18 chars] at the end]\nUser says: $clean"
+            else -> clean
+        }
+    }
+
+    private fun callSupabaseChat(
+        userPrompt: String,
+        memories: List<String>,
+        tasks: List<String>
+    ): AssistantReply? {
+        return try {
+            val payload = JSONObject().apply {
+                put("prompt", enrichPromptForSupabase(userPrompt))
+                put("memories", JSONArray(memories.take(6)))
+                put("tasks", JSONArray(tasks.take(6)))
+            }
+            val respText = postSupabaseEdge("gemini-chat", payload.toString()) ?: return null
+            val reply = JSONObject(respText).optString("reply").trim()
+            if (reply.isNotBlank()) parseAssistantReply(reply, userPrompt) else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun postSupabaseEdge(functionName: String, jsonBody: String): String? {
+        val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+        val url = URL("$baseUrl/functions/v1/$functionName")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
+            setRequestProperty("Authorization", "Bearer ${BuildConfig.SUPABASE_ANON_KEY}")
+        }
+        return try {
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { writer ->
+                writer.write(jsonBody)
+                writer.flush()
+            }
+            if (conn.responseCode in 200..299) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                null
+            }
+        } finally {
+            conn.disconnect()
         }
     }
 

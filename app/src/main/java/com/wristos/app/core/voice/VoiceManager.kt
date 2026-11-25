@@ -119,7 +119,7 @@ class VoiceManager(context: Context) {
     private fun requestVoiceAudioFocus() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_ASSISTANT)
@@ -131,7 +131,7 @@ class VoiceManager(context: Context) {
                 audioManager?.requestAudioFocus(req)
             } else {
                 @Suppress("DEPRECATION")
-                audioManager?.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                audioManager?.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             }
         } catch (_: Exception) {
         }
@@ -279,30 +279,43 @@ class VoiceManager(context: Context) {
                     _rmsDb.value = 0f
                     Log.w("VoiceManager", "SpeechRecognizer error: $error (retry=$retryCount, onDevice=$isUsingOnDeviceRecognizer)")
 
-                    // Error 11 = ERROR_SERVER_DISCONNECTED; also retry audio/client/busy/network transient wake errors
-                    val isServerOrTransient = error == 11 /* ERROR_SERVER_DISCONNECTED */ ||
-                        error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                    // Error 11 = ERROR_SERVER_DISCONNECTED: try on-device recognizer once if available, otherwise launch system voice sheet cleanly
+                    if (error == 11) {
+                        val canUseOnDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext) &&
+                            !isUsingOnDeviceRecognizer
+                        if (canUseOnDevice && retryCount == 0) {
+                            retryCount++
+                            preferOfflineNextAttempt = true
+                            _isListening.value = false
+                            val delayed = Runnable { launchRecognizerNow(onResult) }
+                            startDelayRunnable = delayed
+                            mainHandler.postDelayed(delayed, 180L)
+                            return
+                        }
+                        if (fallbackLauncherCallback != null) {
+                            _isListening.value = false
+                            _errorMessage.value = null
+                            fallbackLauncherCallback?.invoke()
+                            return
+                        }
+                    }
+
+                    // Transient wake errors (busy / audio HAL settling / client / network)
+                    val isTransient = error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                         error == SpeechRecognizer.ERROR_AUDIO ||
                         error == SpeechRecognizer.ERROR_CLIENT ||
                         error == SpeechRecognizer.ERROR_NETWORK
 
-                    if (isServerOrTransient && retryCount < 2) {
+                    if (isTransient && retryCount < 2) {
                         retryCount++
-                        if (error == 11 || error == SpeechRecognizer.ERROR_NETWORK) {
+                        if (error == SpeechRecognizer.ERROR_NETWORK) {
                             preferOfflineNextAttempt = true
                         }
                         _isListening.value = false
                         val delayed = Runnable { launchRecognizerNow(onResult) }
                         startDelayRunnable = delayed
-                        mainHandler.postDelayed(delayed, 280L)
-                        return
-                    }
-
-                    // If server still disconnected after retries (error 11), fall back to system RecognizerIntent UI if registered
-                    if (error == 11 && fallbackLauncherCallback != null) {
-                        _isListening.value = false
-                        _errorMessage.value = null
-                        fallbackLauncherCallback?.invoke()
+                        mainHandler.postDelayed(delayed, 260L)
                         return
                     }
 

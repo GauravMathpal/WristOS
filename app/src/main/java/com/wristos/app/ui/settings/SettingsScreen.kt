@@ -97,7 +97,9 @@ fun SettingsScreen(
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
     }
-    val isGeminiReady = customKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
+    val isGeminiReady = customKey.isNotBlank() ||
+        BuildConfig.GEMINI_API_KEY.isNotBlank() ||
+        (BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_ANON_KEY.isNotBlank())
 
     Column(
         modifier = Modifier
@@ -283,9 +285,13 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("Gemini Flash + Offline Engine", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                                Text("Gemini 3.8 Flash + Offline Engine", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
                                 Text(
-                                    text = if (isGeminiReady) "Cloud Gemini API active" else "Offline Smart NLP Engine active",
+                                    text = if (isGeminiReady) {
+                                        if (customKey.isNotBlank()) "Personal Gemini API Key active" else "WristOS Cloud Gemini active"
+                                    } else {
+                                        "Offline Smart NLP Engine active"
+                                    },
                                     fontSize = 12.sp,
                                     color = if (isGeminiReady) EmeraldSuccess else palette.primary
                                 )

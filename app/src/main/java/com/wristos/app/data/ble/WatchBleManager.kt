@@ -92,9 +92,11 @@ class WatchBleManager(private val context: Context) {
     }
 
     // Sequential BLE GATT operation queue (Android drops overlapping read/write/descriptor calls)
-    private val gattOpQueue = ArrayDeque<() -> Boolean>()
+    private data class QueuedGattOp(val op: () -> Boolean, val retriesLeft: Int = 3)
+    private val gattOpQueue = ArrayDeque<QueuedGattOp>()
     private var isGattOpInFlight = false
     private var gattOpTimeoutJob: Job? = null
+    private var gattOpRetryJob: Job? = null
 
     init {
         ensureAiWakeChannel()
@@ -249,6 +251,10 @@ class WatchBleManager(private val context: Context) {
                         }
                     }
 
+                    // Give Android GATT stack a short settle window after discovery so initial CCCD writes don't hit BUSY
+                    delay(180L)
+                    if (gatt !== bluetoothGatt) return@launch
+
                     clearGattQueue()
                     musicNotifyRetries = 0
                     enqueueGattOp { enableNotifications(gatt, BleConstants.SERVICE_MUSIC, BleConstants.CHAR_MUSIC_EVENT) }
@@ -317,16 +323,16 @@ class WatchBleManager(private val context: Context) {
     }
 
     private fun enqueueGattOp(op: () -> Boolean) {
-        gattOpQueue.addLast(op)
+        gattOpQueue.addLast(QueuedGattOp(op, retriesLeft = 3))
         processNextGattOp()
     }
 
     private fun processNextGattOp() {
         if (isGattOpInFlight) return
         while (gattOpQueue.isNotEmpty()) {
-            val next = gattOpQueue.removeFirst()
+            val item = gattOpQueue.removeFirst()
             val started = try {
-                next()
+                item.op()
             } catch (e: Exception) {
                 Log.w(TAG, "GATT op exception", e)
                 false
@@ -340,6 +346,15 @@ class WatchBleManager(private val context: Context) {
                     finishCurrentGattOp()
                 }
                 return
+            } else if (item.retriesLeft > 0 && bluetoothGatt != null) {
+                // Retry after short settle when Android GATT returns BUSY right after discovery
+                gattOpQueue.addFirst(item.copy(retriesLeft = item.retriesLeft - 1))
+                gattOpRetryJob?.cancel()
+                gattOpRetryJob = scope.launch {
+                    delay(260L)
+                    processNextGattOp()
+                }
+                return
             }
         }
     }
@@ -347,6 +362,8 @@ class WatchBleManager(private val context: Context) {
     private fun finishCurrentGattOp() {
         gattOpTimeoutJob?.cancel()
         gattOpTimeoutJob = null
+        gattOpRetryJob?.cancel()
+        gattOpRetryJob = null
         isGattOpInFlight = false
         processNextGattOp()
     }
@@ -354,6 +371,8 @@ class WatchBleManager(private val context: Context) {
     private fun clearGattQueue() {
         gattOpTimeoutJob?.cancel()
         gattOpTimeoutJob = null
+        gattOpRetryJob?.cancel()
+        gattOpRetryJob = null
         isGattOpInFlight = false
         gattOpQueue.clear()
     }
@@ -544,19 +563,37 @@ class WatchBleManager(private val context: Context) {
             }
         }
 
-        // Scan window watchdog (12s) -> retry or backoff instead of burning battery forever
+        // Scan window watchdog (22s covers any BLE supervision timeout after app kill) -> hand off to passive autoConnect/retry
         connectionWatchdogJob?.cancel()
         connectionWatchdogJob = scope.launch {
-            delay(12_000L)
+            delay(22_000L)
             if (isScanning && _watchData.value.connectionState == WatchConnectionState.SCANNING) {
-                Log.d(TAG, "LE scan window ended without finding watch; pausing before retry")
+                Log.d(TAG, "LE scan window ended without finding watch; switching to passive autoConnect / retry")
                 stopScan()
                 _watchData.value = _watchData.value.copy(
                     connectionState = WatchConnectionState.DISCONNECTED,
-                    statusMessage = "Watch not found — bring near phone & tap Connect"
+                    statusMessage = "Listening for watch in background..."
                 )
+                attachBackgroundAutoConnectIfSaved()
                 scheduleReconnect()
             }
+        }
+    }
+
+    private fun attachBackgroundAutoConnectIfSaved() {
+        if (isExplicitDisconnect || !hasBluetoothConnectPermission()) return
+        val adapter = bluetoothAdapter ?: return
+        if (!adapter.isEnabled || bluetoothGatt != null) return
+        val savedAddr = prefs.getLastWatchAddress() ?: return
+        try {
+            val savedDevice = adapter.getRemoteDevice(savedAddr)
+            Log.d(TAG, "Attaching low-power autoConnect=true observer for $savedAddr")
+            bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                savedDevice.connectGatt(appContext, true, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                savedDevice.connectGatt(appContext, true, gattCallback)
+            }
+        } catch (_: Exception) {
         }
     }
 

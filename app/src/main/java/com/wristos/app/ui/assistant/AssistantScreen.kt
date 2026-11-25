@@ -215,7 +215,7 @@ fun AssistantScreen(
                                 )
                             }
                             Text(
-                                text = if (viewModel.isGeminiConfigured) "Gemini Flash • Watch Neural Bridge" else "Smart Engine • Zero Latency",
+                                text = if (viewModel.isGeminiConfigured) "Gemini 3.8 Flash • Watch Neural Bridge" else "Smart Engine • Zero Latency",
                                 fontSize = 11.sp,
                                 color = palette.primaryVariant.copy(alpha = 0.85f)
                             )

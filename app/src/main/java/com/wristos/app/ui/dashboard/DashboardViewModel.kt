@@ -154,7 +154,21 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val focusMins = focusSessions.value.sumOf { it.durationMinutes }
 
             val fallback = buildOfflineBriefing(pending, stepCount, goal, hr, focusMins)
-            if (geminiClient.isConfigured) {
+            val cloudBriefing = geminiClient.generateDailyBriefing(
+                pendingTasks = pending.map { it.title to it.dueTime },
+                memories = emptyList(),
+                steps = stepCount,
+                stepGoal = goal,
+                heartRateAvg = hr,
+                focusMinutes = focusMins
+            )
+            if (cloudBriefing != null) {
+                _briefing.value = DailyBriefingState(
+                    greeting = cloudBriefing.greeting,
+                    priorities = cloudBriefing.priorities.ifEmpty { fallback.priorities },
+                    healthInsight = cloudBriefing.healthInsight.ifBlank { fallback.healthInsight }
+                )
+            } else if (geminiClient.isConfigured) {
                 val prompt = "Give me a 2-sentence daily briefing summarizing ${pending.size} pending tasks (${pending.take(3).joinToString { it.title }}), $stepCount/$goal steps, and $focusMins focus mins."
                 val res = geminiClient.generateResponse(
                     userPrompt = prompt,

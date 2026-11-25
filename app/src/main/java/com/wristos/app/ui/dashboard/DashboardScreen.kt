@@ -137,6 +137,7 @@ fun DashboardScreen(
     var modalTitle by remember { mutableStateOf("") }
     var modalSub by remember { mutableStateOf("") }
     var modalTag by remember { mutableStateOf("Personal") }
+    var showWatchHubDialog by remember { mutableStateOf(false) }
 
     val canDrawOverlays = remember(currentTimeMs, resumeTick) { viewModel.bleManager.canDrawOverlaysCompat() }
     val canFullScreen = remember(currentTimeMs, resumeTick) { viewModel.bleManager.canUseFullScreenIntentCompat() }
@@ -334,6 +335,7 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(16.dp, RoundedCornerShape(26.dp), ambientColor = palette.gradStart.copy(alpha = 0.25f))
+                    .clickable { showWatchHubDialog = true }
             ) {
                 Box(modifier = Modifier.fillMaxWidth().height(108.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1034,6 +1036,69 @@ fun DashboardScreen(
             dismissButton = {
                 TextButton(onClick = { activeModal = null }) {
                     Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    if (showWatchHubDialog) {
+        AlertDialog(
+            onDismissRequest = { showWatchHubDialog = false },
+            containerColor = palette.surfaceElevated,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.size(10.dp).background(statusDotColor, CircleShape))
+                    Text(watchData.deviceName, color = TextPrimary, fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = when (watchData.connectionState) {
+                            WatchConnectionState.CONNECTED -> "BLE Live • Battery ${watchData.batteryLevel}% • ${watchData.stepCount} steps"
+                            WatchConnectionState.SCANNING -> watchData.statusMessage ?: "Scanning for watch..."
+                            WatchConnectionState.CONNECTING -> "Establishing GATT link..."
+                            WatchConnectionState.DISCONNECTED -> watchData.statusMessage ?: "Not connected"
+                        },
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                    AuroraGradientButton(
+                        text = if (isConnected) "Sync Time & Telemetry" else "Scan & Connect Watch",
+                        onClick = {
+                            if (isConnected) viewModel.syncTelemetry() else viewModel.connectWatch()
+                            toastMessage = if (isConnected) "Synced time, battery & steps" else "Scanning for WristOS..."
+                            showWatchHubDialog = false
+                        }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.sendTestAlert("Find Watch • WristOS")
+                                toastMessage = if (isConnected) "Buzzed watch" else "Connect watch first"
+                                showWatchHubDialog = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, palette.border)
+                        ) {
+                            Text("Buzz Watch", fontSize = 11.sp, color = TextPrimary)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                showWatchHubDialog = false
+                                onNavigate(Screen.Settings.route)
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, palette.border)
+                        ) {
+                            Text("AI Wake Setup", fontSize = 11.sp, color = palette.primary)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showWatchHubDialog = false }) {
+                    Text("Close", color = TextSecondary)
                 }
             }
         )
